@@ -1,103 +1,200 @@
-import Image from "next/image";
+// app/page.tsx
+import Link from "next/link"
+import { redirect } from "next/navigation"
+import { cookies } from "next/headers"
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 
-export default function Home() {
+export const metadata = {
+  title: "Spontaneo — Real people. Real plans. Right now.",
+  description:
+    "Tap to create or join casual micro-plans in Denver’s RiNo, LoHi, and Five Points. Coffee, walks, pickleball, brewery hangs and more. Join → chat → meet.",
+}
+
+export default async function Home() {
+  // Logged-in users go straight to Discover
+  const supabase = createServerComponentClient({ cookies })
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session) redirect("/discover")
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-indigo-50 via-white to-white">
+      {/* Soft background motion */}
+      <div aria-hidden className="pointer-events-none absolute -top-40 -left-28 h-96 w-96 rounded-full bg-indigo-300/30 blur-3xl animate-[pulse_7s_ease-in-out_infinite]" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-40 -right-28 h-96 w-96 rounded-full bg-sky-300/30 blur-3xl animate-[pulse_9s_ease-in-out_infinite]" />
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* ============================ Header ============================ */}
+      <header className="sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-white/60 bg-white/90 border-b">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
+          <Link href="/" className="flex items-center gap-2 text-lg font-bold">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white">⚡</span>
+            Spontaneo
+          </Link>
+          <nav className="flex items-center gap-3">
+            <a href="#how" className="nav-link">How it works</a>
+            <a href="#niches" className="nav-link">Niches</a>
+            <Link href="/login" className="ghost-btn">Log in</Link>
+            <Link href="/signup" className="fancy-btn">Sign up</Link>
+          </nav>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      </header>
+
+      {/* ============================ Hero ============================ */}
+      <section className="mx-auto max-w-7xl px-6 pt-12 pb-10 md:pt-16">
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium text-indigo-700 shadow-sm backdrop-blur">
+            <span className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />
+            Denver beta • RiNo • LoHi • Five Points
+          </div>
+
+          <h1 className="mt-5 text-5xl sm:text-6xl font-extrabold tracking-tight text-gray-900">
+            Real people. <span className="text-indigo-600">Real plans.</span> <span className="bg-gradient-to-r from-indigo-600 to-sky-500 bg-clip-text text-transparent">Right now.</span>
+          </h1>
+
+          <p className="mx-auto mt-3 max-w-2xl text-gray-600 text-base sm:text-lg">
+            Tap to join or start simple micro-plans nearby — coffee, walks, pickleball, brewery hangs and more.
+            Join → chat → meet. No feeds. No FOMO. Just plans.
+          </p>
+
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+            <Link href="/signup" className="fancy-btn">Get started free</Link>
+            <Link href="/discover" className="ghost-btn">Browse plans</Link>
+          </div>
+
+          <div className="mt-7 flex flex-wrap justify-center gap-2 text-sm">
+            {["☕ Coffee", "🏓 Pickleball", "🍻 Breweries", "🐕 Dog walks", "🎲 Trivia", "🖼️ Gallery hops"].map((c) => (
+              <span key={c} className="chip">{c}</span>
+            ))}
+          </div>
+
+          {/* App preview card */}
+          <div className="mt-10 mx-auto w-full max-w-md">
+            <div className="group relative rounded-3xl border border-gray-200 bg-white/90 p-4 shadow-md backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+              <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 rounded-3xl bg-gradient-to-r from-indigo-200/0 via-indigo-200/40 to-sky-200/0 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100" />
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-indigo-100 font-semibold text-indigo-700">AM</div>
+                <div className="text-left leading-tight">
+                  <div className="font-semibold">Casual Brewery Hang</div>
+                  <div className="text-xs text-gray-400">Tonight • RiNo</div>
+                </div>
+                <span className="ml-auto rounded-full bg-pink-100 px-2 py-1 text-xs text-pink-600">🔥 Happening</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between text-sm text-gray-700">
+                <div>🕠 6:30 PM</div>
+                <div className="truncate">📍 Ratio Beerworks</div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button type="button" className="btn-primary">I’m In!</button>
+                <button type="button" className="btn-secondary">💬 Chat</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================ How it works ============================ */}
+      <section id="how" className="mx-auto max-w-7xl px-6 pb-14">
+        <h2 className="text-center text-xl sm:text-2xl font-bold text-gray-900">How it works</h2>
+        <ol className="mt-6 grid gap-4 sm:grid-cols-3">
+          <Step n={1} title="Pick a neighborhood" desc="Stay hyperlocal. Walk over in minutes." />
+          <Step n={2} title="Create or join" desc="One-tap templates. Small groups. Clear times." />
+          <Step n={3} title="Chat & meet" desc="Join unlocks chat. Align quickly and go." />
+        </ol>
+      </section>
+
+      {/* ============================ Niches ============================ */}
+      <section id="niches" className="mx-auto max-w-7xl px-6 pb-16">
+        <h2 className="text-center text-xl sm:text-2xl font-bold text-gray-900">What people spin up</h2>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            ["☕ Coffee & co-work sprints", "60–90 minute focus bursts with neighbors."],
+            ["🍻 Brewery casuals", "After-work hangs — first-timer friendly."],
+            ["🏓 Pickleball meetups", "Beginners welcome. Rotate in."],
+            ["🐕 Dog walks", "Welton St, Commons Park & more."],
+            ["🎲 Trivia warm-ups", "Form a team in minutes."],
+            ["🖼️ Gallery hops", "Street art + small galleries."],
+          ].map(([title, desc]) => (
+            <div key={title} className="card">
+              <div className="text-2xl">{title.split(" ")[0]}</div>
+              <div>
+                <div className="font-semibold">{title}</div>
+                <div className="text-sm text-gray-600">{desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ============================ Footer ============================ */}
+      <footer className="border-t bg-white">
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
+          <div className="text-sm text-gray-500">
+            Built with ❤️ in Denver • © {new Date().getFullYear()} Spontaneo
+          </div>
+          <div className="flex items-center gap-4 text-sm">
+            <a href="mailto:hello@spontaneo.app" className="link">Contact</a>
+            <Link href="/terms" className="link">Terms</Link>
+            <Link href="/privacy" className="link">Privacy</Link>
+          </div>
+        </div>
       </footer>
-    </div>
-  );
+
+      {/* ======= tiny style helpers (Tailwind utility compositions) ======= */}
+      <style>{`
+        .fancy-btn {
+          position: relative; display:inline-flex; align-items:center; justify-content:center;
+          gap:.5rem; border-radius:1rem; padding:.75rem 1.25rem; font-weight:600;
+          color:white; background-image:linear-gradient(90deg,#4f46e5,#0ea5e9);
+          box-shadow:0 8px 16px rgba(79,70,229,.18);
+          transition:transform .15s ease, filter .2s ease, box-shadow .2s ease;
+        }
+        .fancy-btn:hover { filter:saturate(1.3); box-shadow:0 12px 22px rgba(79,70,229,.24); transform:translateY(-1px) }
+        .fancy-btn:active { transform:translateY(0) }
+        .ghost-btn {
+          display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+          border-radius:1rem; padding:.75rem 1.25rem; font-weight:600; color:#4338ca;
+          background:#fff; border:1px solid rgba(67,56,202,.25); box-shadow:0 2px 8px rgba(0,0,0,.04);
+          transition:transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+        }
+        .ghost-btn:hover { transform:translateY(-1px); background:#eef2ff; border-color:rgba(67,56,202,.35); box-shadow:0 8px 16px rgba(0,0,0,.08) }
+        .nav-link { padding:.4rem .6rem; border-radius:.75rem; color:#374151; transition:background .2s ease }
+        .nav-link:hover { background:#f3f4f6 }
+        .chip {
+          border-radius:9999px; border:1px solid #e5e7eb; background:#fff; padding:.25rem .75rem;
+          box-shadow:0 1px 2px rgba(0,0,0,.04); transition:transform .15s ease, box-shadow .2s ease;
+        }
+        .chip:hover { transform:translateY(-2px); box-shadow:0 6px 14px rgba(0,0,0,.08) }
+        .btn-primary {
+          position:relative; overflow:hidden; border-radius:0.75rem; background:linear-gradient(90deg,#4f46e5,#0ea5e9);
+          color:white; font-weight:600; padding:.5rem 0; box-shadow:0 6px 14px rgba(79,70,229,.22);
+          transition:transform .15s ease, box-shadow .2s ease, filter .2s ease;
+        }
+        .btn-primary:hover { transform:translateY(-1px); filter:saturate(1.25); box-shadow:0 10px 18px rgba(79,70,229,.28) }
+        .btn-secondary {
+          border-radius:0.75rem; border:1px solid rgba(67,56,202,.25); background:#fff; color:#4338ca;
+          font-weight:600; padding:.5rem 0; box-shadow:0 2px 8px rgba(0,0,0,.04);
+          transition:transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+        }
+        .btn-secondary:hover { transform:translateY(-1px); background:#eef2ff; border-color:rgba(67,56,202,.35); box-shadow:0 8px 16px rgba(0,0,0,.08) }
+        .card {
+          display:flex; gap:.75rem; align-items:flex-start; border-radius:1rem; background:#fff; padding:1.25rem;
+          border:1px solid #e5e7eb; box-shadow:0 4px 12px rgba(0,0,0,.06); transition:transform .15s ease, box-shadow .2s ease;
+        }
+        .card:hover { transform:translateY(-2px); box-shadow:0 10px 20px rgba(0,0,0,.08) }
+      `}</style>
+    </main>
+  )
+}
+
+/* ---------- tiny presentational helper (no client hooks) ---------- */
+
+function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
+  return (
+    <li className="rounded-2xl border bg-white p-5 shadow">
+      <div className="flex items-center gap-3">
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-indigo-600 text-white font-semibold">{n}</span>
+        <div className="font-semibold">{title}</div>
+      </div>
+      <p className="mt-2 text-sm text-gray-600">{desc}</p>
+    </li>
+  )
 }
