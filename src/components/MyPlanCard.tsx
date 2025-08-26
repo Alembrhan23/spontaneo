@@ -1,4 +1,5 @@
 'use client'
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
@@ -28,54 +29,90 @@ function Avatar({ url, name }: { url?: string|null, name?: string|null }) {
   )
 }
 
+function VerifiedBadge({ small=false }:{ small?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full ${small?'px-1.5 py-0.5 text-[10px]':'px-2 py-0.5 text-xs'} bg-emerald-600/10 text-emerald-700`}
+      title="ID-verified host"
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" className="fill-current">
+        <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z"/>
+      </svg>
+      <span>Verified</span>
+    </span>
+  )
+}
+
 export default function MyPlanCard({ mode, activity: a, onChange }: Props) {
   const [busy, setBusy] = useState(false)
-  const hostName = a?.host?.full_name ?? 'Host'
+
+  const hostName   = a?.host?.full_name ?? 'Host'
   const hostAvatar = a?.host?.avatar_url ?? null
+  const hostVerified = !!a?.host?.is_verified
+
+  async function tryEndpoint(path: string) {
+    try {
+      const r = await fetch(path, { method: 'POST' })
+      if (r.ok) return true
+    } catch {}
+    return false
+  }
 
   async function cancelPlan() {
     if (!confirm('Cancel this plan for everyone?')) return
     setBusy(true)
-    // use whatever your schema has — here we soft-cancel via status + canceled_at
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase
-      .from('activities')
-      .update({ status: 'canceled', canceled_at: new Date().toISOString() })
-      .eq('id', a.id)
-      .eq('creator_id', user?.id ?? '')
+
+    const ok = await tryEndpoint(`/api/plans/${a.id}/cancel`)
+    if (!ok) {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { error } = await supabase
+        .from('activities')
+        .update({ status: 'canceled', canceled_at: new Date().toISOString() })
+        .eq('id', a.id)
+        .eq('creator_id', user?.id ?? '')
+      if (error) { alert(error.message); setBusy(false); return }
+    }
     setBusy(false)
-    if (error) return alert(error.message)
     onChange?.()
   }
 
   async function leavePlan() {
     if (!confirm('Leave this plan?')) return
     setBusy(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase
-      .from('activity_participants')
-      .delete()
-      .eq('activity_id', a.id)
-      .eq('user_id', user?.id ?? '')
+
+    const ok = await tryEndpoint(`/api/plans/${a.id}/leave`)
+    if (!ok) {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { error } = await supabase
+        .from('activity_participants')
+        .delete()
+        .eq('activity_id', a.id)
+        .eq('user_id', user?.id ?? '')
+      if (error) { alert(error.message); setBusy(false); return }
+    }
     setBusy(false)
-    if (error) return alert(error.message)
     onChange?.()
   }
 
   const isCanceled = a?.status === 'canceled'
-  const actionLabel = mode === 'hosting' ? 'Cancel' : 'Leave'
+  const actionLabel   = mode === 'hosting' ? 'Cancel' : 'Leave'
   const actionHandler = mode === 'hosting' ? cancelPlan : leavePlan
+
+  // optional unread bubble if your query includes a.unread_count
+  const unread = Number(a?.unread_count ?? 0)
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-      {/* header stripe to look different from Discover */}
       <div className={`h-1 rounded-t-2xl ${mode==='hosting' ? 'bg-gradient-to-r from-amber-500 to-rose-500' : 'bg-gradient-to-r from-sky-500 to-indigo-500'}`} />
 
       <div className="p-4 space-y-3">
         <div className="flex items-center gap-3">
           <Avatar url={hostAvatar} name={hostName} />
           <div className="min-w-0">
-            <div className="text-sm text-zinc-500">{mode === 'hosting' ? 'You are hosting' : `Hosted by ${hostName}`}</div>
+            <div className="flex items-center gap-2 text-sm text-zinc-500">
+              <span>{mode === 'hosting' ? 'You are hosting' : `Hosted by ${hostName}`}</span>
+              {hostVerified && <VerifiedBadge small />}
+            </div>
             <h3 className="font-semibold text-zinc-900 truncate">{a.title || 'Untitled plan'}</h3>
           </div>
         </div>
@@ -100,18 +137,29 @@ export default function MyPlanCard({ mode, activity: a, onChange }: Props) {
             View details
           </Link>
 
-          <button
-            disabled={busy || isCanceled}
-            onClick={actionHandler}
-            className={`px-3 py-2 rounded-lg text-sm font-medium transition
-              ${mode==='hosting'
-                ? 'bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-50'
-                : 'border border-zinc-300 text-zinc-800 hover:bg-zinc-50 disabled:opacity-50'
-              }`}
-            title={mode==='hosting' ? 'Cancel this plan' : 'Leave this plan'}
-          >
-            {busy ? 'Working…' : actionLabel}
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/activity/${a.id}/chat`}
+              className={`relative px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 ${isCanceled ? 'pointer-events-none opacity-50' : ''}`}
+              title="Open chat"
+            >
+              Chat
+              {unread > 0 && (
+                <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white text-[10px] grid place-items-center">
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </Link>
+
+            <button
+              disabled={busy || isCanceled}
+              onClick={actionHandler}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition border border-zinc-300 text-zinc-800 hover:bg-zinc-50 disabled:opacity-50`}
+              title={mode==='hosting' ? 'Cancel this plan' : 'Leave this plan'}
+            >
+              {busy ? 'Working…' : actionLabel}
+            </button>
+          </div>
         </div>
       </div>
     </div>

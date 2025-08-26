@@ -1,4 +1,3 @@
-// app/login/page.tsx
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -16,7 +15,8 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (error) return alert(error.message)
-    router.push('/discover')
+    router.replace('/discover')
+    router.refresh() // ensure header/react trees see auth immediately
   }
 
   return (

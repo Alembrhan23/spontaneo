@@ -1,4 +1,3 @@
-// app/discover/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -14,20 +13,28 @@ type ActivityRow = {
   category: string | null
   neighborhood: string | null
   location: string | null
+  location_name?: string | null
+  location_lat?: number | null
+  location_lng?: number | null
   start_at: string
   max_spots: number | null
   created_at: string | null
   creator_id: string
 }
 
-type ProfileRow = { id: string; full_name: string | null; avatar_url: string | null }
+type ProfileRow = {
+  id: string
+  full_name: string | null
+  avatar_url: string | null
+  is_verified: boolean | null
+}
 type ParticipantRow = { activity_id: string; user_id: string }
 
 const quickActions = [
-  { icon: PlusCircle, label: 'Create Plan', desc: 'Start something new', action: 'create' },
-  { icon: Shuffle,   label: 'Surprise Me', desc: 'Find random activity', action: 'surprise' },
-  { icon: Utensils,  label: 'Food & Drink', desc: 'Find dining options', action: 'filter:Food & Drink' },
-  { icon: Dumbbell,  label: 'Active',       desc: 'Sports & outdoors',   action: 'filter:Sports' },
+  { icon: PlusCircle, label: 'Create Plan',  desc: 'Start something new',   action: 'create' },
+  { icon: Shuffle,   label: 'Surprise Me',  desc: 'Find something random', action: 'surprise' },
+  { icon: Utensils,  label: 'Food & Drink', desc: 'Find dining options',   action: 'filter:Food & Drink' },
+  { icon: Dumbbell,  label: 'Active',       desc: 'Sports & outdoors',     action: 'filter:Sports' },
 ]
 
 const neighborhoods = ['All Neighborhoods', 'RiNo', 'LoHi', 'Five Points'] as const
@@ -46,18 +53,18 @@ export default function DiscoverPage() {
   async function load() {
     setLoading(true)
     try {
-      // who am I?
       const { data: { user } } = await supabase.auth.getUser()
       const currentUserId = user?.id ?? null
       setMe(currentUserId)
 
-      // 1) activities
+      // 1) activities (soonest first)
       const { data: activities, error: e1 } = await supabase
         .from('activities')
-        .select('id, title, description, category, neighborhood, location, start_at, max_spots, created_at, creator_id, location_name,  location_lat, location_lng')
+        .select('id, title, description, category, neighborhood, location, start_at, max_spots, created_at, creator_id, location_name, location_lat, location_lng')
+        .gte('start_at', new Date(Date.now() - 30 * 60 * 1000).toISOString()) // show near-future & just-started
         .order('start_at', { ascending: true })
       if (e1) throw e1
-      if (!activities || activities.length === 0) { setRows([]); return }
+      if (!activities?.length) { setRows([]); return }
 
       const ids = activities.map(a => a.id)
       const creatorIds = Array.from(new Set(activities.map(a => a.creator_id)))
@@ -83,25 +90,21 @@ export default function DiscoverPage() {
         joinedSet = new Set((data ?? []).map(d => d.activity_id))
       }
 
-      // 4) creator profiles
+      // 4) creator profiles (NOTE: include is_verified)
       let profiles: ProfileRow[] = []
       if (creatorIds.length) {
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, full_name, avatar_url')
+          .select('id, full_name, avatar_url, is_verified')
           .in('id', creatorIds)
         if (error) throw error
         profiles = data ?? []
       }
 
       // merge
-      const byCreator: Record<string, ProfileRow> = Object.fromEntries(
-        profiles.map(p => [p.id, p])
-      )
+      const byCreator: Record<string, ProfileRow> = Object.fromEntries(profiles.map(p => [p.id, p]))
       const byActCount: Record<string, number> = {}
-      parts.forEach(p => {
-        byActCount[p.activity_id] = (byActCount[p.activity_id] ?? 0) + 1
-      })
+      parts.forEach(p => { byActCount[p.activity_id] = (byActCount[p.activity_id] ?? 0) + 1 })
 
       const merged = (activities as ActivityRow[]).map(a => ({
         ...a,
@@ -143,7 +146,7 @@ export default function DiscoverPage() {
           <button
             key={c.label}
             onClick={() => onQuick(c.action)}
-            className="p-4 rounded-2xl shadow bg-white text-left hover:shadow-md transition"
+            className="p-4 rounded-2xl shadow bg-white text-left hover:shadow-md hover:-translate-y-0.5 transition"
           >
             <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center mb-2">
               <c.icon className="text-indigo-600 w-5 h-5" />

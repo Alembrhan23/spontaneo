@@ -8,19 +8,15 @@ const TABS = [
   { href: '/happening',    label: 'Happening' },
   { href: '/plans',        label: 'My Plans' },
   { href: '/neighborhood', label: 'Neighborhood' },
-]
+] as const
 
 export default function TopTabs() {
   const pathname = usePathname() || '/'
-
-  // Treat "/" as Discover
   const activeHref =
-    pathname === '/'
-      ? '/discover'
-      : TABS.find(t => pathname.startsWith(t.href))?.href ?? '/discover'
+    pathname === '/' ? '/discover' : (TABS.find(t => pathname.startsWith(t.href))?.href ?? '/discover')
 
   return (
-    <div className="bg-white sticky top-0 z-30 shadow-sm">
+    <div className="bg-white sticky top-14 z-30 shadow-sm">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <nav className="flex gap-8">
           {TABS.map(t => {
