@@ -17,20 +17,38 @@ export default function LoginClient({ next }: { next: string }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
+  // If already logged in (e.g., returned from OAuth), bounce to `next`
   useEffect(() => {
     if (!loading && user) {
-      router.replace('/discover')
+      router.replace(next)
       router.refresh()
     }
-  }, [loading, user, router])
+  }, [loading, user, router, next])
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErr(null)
     setBusy(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setBusy(false)
+      setErr(error.message)
+      return
+    }
+
+    // Bridge the client session to server cookies so RSC/route handlers see it
+    const at = data.session?.access_token
+    const rt = data.session?.refresh_token
+    if (at && rt) {
+      await fetch('/auth/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: at, refresh_token: rt }),
+      })
+    }
+
     setBusy(false)
-    if (error) { setErr(error.message); return }
     router.replace(next)
     router.refresh()
   }
@@ -73,9 +91,11 @@ export default function LoginClient({ next }: { next: string }) {
               <span className="text-xs text-zinc-600">Email</span>
               <div className="mt-1.5 relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                <input type="email" inputMode="email" autoComplete="email" required
+                <input
+                  type="email" inputMode="email" autoComplete="email" required
                   className="w-full rounded-xl border bg-white pl-10 pr-3 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500"
-                  placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
             </label>
 
@@ -83,11 +103,15 @@ export default function LoginClient({ next }: { next: string }) {
               <span className="text-xs text-zinc-600">Password</span>
               <div className="mt-1.5 relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                <input type={showPw ? 'text' : 'password'} autoComplete="current-password" required
+                <input
+                  type={showPw ? 'text' : 'password'} autoComplete="current-password" required
                   className="w-full rounded-xl border bg-white pl-10 pr-10 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500"
-                  placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
-                <button type="button" aria-label={showPw ? 'Hide password' : 'Show password'}
-                  onClick={() => setShowPw(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md hover:bg-zinc-100">
+                  placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button" aria-label={showPw ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowPw(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md hover:bg-zinc-100"
+                >
                   {showPw ? <EyeOff className="w-4 h-4 text-zinc-500" /> : <Eye className="w-4 h-4 text-zinc-500" />}
                 </button>
               </div>
@@ -105,7 +129,7 @@ export default function LoginClient({ next }: { next: string }) {
           </form>
 
           <div className="my-5 flex items-center gap-4">
-            <div className="h-px flex-1 bg-zinc-2 00" />
+            <div className="h-px flex-1 bg-zinc-200" />
             <span className="text-[11px] uppercase tracking-wider text-zinc-500">or</span>
             <div className="h-px flex-1 bg-zinc-200" />
           </div>
