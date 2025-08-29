@@ -1,8 +1,6 @@
-// app/page.tsx
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { cookies } from "next/headers"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { server } from "@/lib/supabase/server" // ← new async server client
 
 export const metadata = {
   title: "Spontaneo — Real people. Real plans. Right now.",
@@ -12,7 +10,7 @@ export const metadata = {
 
 export default async function Home() {
   // Logged-in users go straight to Discover
-  const supabase = createServerComponentClient({ cookies })
+  const supabase = await server()
   const { data: { session } } = await supabase.auth.getSession()
   if (session) redirect("/discover")
 
@@ -57,7 +55,7 @@ export default async function Home() {
 
           <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
             <Link href="/signup" className="fancy-btn">Get started free</Link>
-            <Link href="/discover" className="ghost-btn">Browse plans</Link>
+            <Link href="/login" className="ghost-btn">Browse plans</Link>
           </div>
 
           <div className="mt-7 flex flex-wrap justify-center gap-2 text-sm">
@@ -186,7 +184,6 @@ export default async function Home() {
 }
 
 /* ---------- tiny presentational helper (no client hooks) ---------- */
-
 function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
   return (
     <li className="rounded-2xl border bg-white p-5 shadow">

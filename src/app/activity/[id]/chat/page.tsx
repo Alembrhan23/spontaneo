@@ -1,7 +1,6 @@
-// app/activity/[id]/chat/page.tsx
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import Image from 'next/image'
@@ -32,21 +31,27 @@ export default function ActivityChatPage() {
   const listRef = useRef<HTMLDivElement>(null)
   const profileCache = useRef<Record<string, { full_name?: string | null; avatar_url?: string | null }>>({})
 
-  const dateKey = (iso: string) => new Date(iso).toDateString()
-  const timeStr = (iso: string) =>
-    new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const timeStr = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
-  // 🔧 keep this hook BEFORE any early return
   const groups = useMemo(() => {
     const byDay: Record<string, Msg[]> = {}
     for (const m of msgs) {
-      const k = dateKey(m.created_at)
+      const k = new Date(m.created_at).toDateString()
       ;(byDay[k] ||= []).push(m)
     }
     return Object.entries(byDay)
   }, [msgs])
 
-  // membership + initial load
+  const markRead = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('activity_reads').upsert({
+      activity_id: activityId,
+      user_id: user.id,
+      last_read_at: new Date().toISOString(),
+    }, { onConflict: 'activity_id,user_id' })
+  }, [activityId])
+
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -55,54 +60,32 @@ export default function ActivityChatPage() {
 
       const [{ data: act }, { data: part }] = await Promise.all([
         supabase.from('activities').select('creator_id').eq('id', activityId).single(),
-        supabase.from('activity_participants').select('activity_id')
-          .eq('activity_id', activityId).eq('user_id', user.id).maybeSingle(),
+        supabase.from('activity_participants').select('activity_id').eq('activity_id', activityId).eq('user_id', user.id).maybeSingle(),
       ])
       const member = !!part || act?.creator_id === user.id
       setIsMember(member)
       if (!member) { setLoading(false); return }
 
       await loadLatest()
+      await markRead()
 
-      // mark read
-      await supabase.from('activity_reads').upsert({
-        activity_id: activityId,
-        user_id: user.id,
-        last_read_at: new Date().toISOString(),
-      }, { onConflict: 'activity_id,user_id' })
-
-      // realtime
       const channel = supabase.channel('room:' + activityId)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'activity_messages',
-          filter: `activity_id=eq.${activityId}`,
-        }, async (payload: any) => {
-          const m: Msg = payload.new
-          if (!profileCache.current[m.user_id]) {
-            const { data } = await supabase
-              .from('profiles')
-              .select('full_name, avatar_url')
-              .eq('id', m.user_id)
-              .single()
-            profileCache.current[m.user_id] = data || {}
-          }
-          m.user = profileCache.current[m.user_id]
-          setMsgs(prev => [...prev, m])
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_messages', filter: `activity_id=eq.${activityId}` },
+          async (payload: any) => {
+            const m: Msg = payload.new
+            if (!profileCache.current[m.user_id]) {
+              const { data } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', m.user_id).single()
+              profileCache.current[m.user_id] = data || {}
+            }
+            m.user = profileCache.current[m.user_id]
+            setMsgs(prev => [...prev, m])
 
-          const el = listRef.current
-          if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 180) {
-            el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-          }
-
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            await supabase.from('activity_reads').upsert({
-              activity_id: activityId, user_id: user.id, last_read_at: new Date().toISOString(),
-            }, { onConflict: 'activity_id,user_id' })
-          }
-        })
+            const el = listRef.current
+            if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) {
+              el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+              await markRead()
+            }
+          })
         .subscribe()
 
       setLoading(false)
@@ -110,19 +93,31 @@ export default function ActivityChatPage() {
 
       return () => { supabase.removeChannel(channel) }
     })()
-  }, [activityId, router])
+  }, [activityId, router, markRead])
 
-  // mark read on focus
+  // mark read on focus, visibility change, and before unmount
   useEffect(() => {
-    function onFocus() {
-      if (!me || !isMember) return
-      supabase.from('activity_reads').upsert({
-        activity_id: activityId, user_id: me, last_read_at: new Date().toISOString(),
-      }, { onConflict: 'activity_id,user_id' })
-    }
+    const onFocus = () => { if (isMember) markRead() }
+    const onVis = () => { if (document.visibilityState === 'visible' && isMember) markRead() }
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [me, isMember, activityId])
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVis)
+      markRead()
+    }
+  }, [isMember, markRead])
+
+  // mark read when scrolled near bottom
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    const onScroll = () => {
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) markRead()
+    }
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [markRead])
 
   async function loadLatest() {
     const { data } = await supabase
@@ -136,11 +131,7 @@ export default function ActivityChatPage() {
     setMsgs(list as Msg[])
     setHasMore((data?.length ?? 0) === PAGE_SIZE)
     setOldestCursor(list[0]?.created_at ?? null)
-    list.forEach(m => {
-      if (m.user_id && m.user && !profileCache.current[m.user_id]) {
-        profileCache.current[m.user_id] = m.user
-      }
-    })
+    list.forEach(m => { if (m.user_id && m.user && !profileCache.current[m.user_id]) profileCache.current[m.user_id] = m.user })
   }
 
   async function loadMore() {
@@ -176,13 +167,13 @@ export default function ActivityChatPage() {
     setMsgs(prev => [...prev, temp])
     setText('')
 
-    const { error } = await supabase.from('activity_messages').insert({
-      activity_id: activityId, user_id: me, content: body,
-    })
+    const { error } = await supabase.from('activity_messages').insert({ activity_id: activityId, user_id: me, content: body })
     if (error) {
       setMsgs(prev => prev.filter(m => m.id !== temp.id))
       setText(body)
       alert(error.message)
+    } else {
+      await markRead()
     }
     setSending(false)
   }
@@ -230,9 +221,7 @@ export default function ActivityChatPage() {
                     <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'} px-1`}>
                       <div className={`flex max-w-[85%] ${mine ? 'flex-row-reverse' : ''} items-end gap-2`}>
                         <div className={`${sameSender ? 'invisible' : ''} w-7 h-7 relative shrink-0`}>
-                          {!mine && (
-                            <Image src={avatar} alt="" fill sizes="28px" className="rounded-full object-cover" />
-                          )}
+                          {!mine && <Image src={avatar} alt="" fill sizes="28px" className="rounded-full object-cover" />}
                         </div>
 
                         <div>
@@ -241,18 +230,10 @@ export default function ActivityChatPage() {
                               {(m.user?.full_name || 'Someone')} • {timeStr(m.created_at)}
                             </div>
                           )}
-                          <div
-                            className={`rounded-2xl px-3 py-2 text-sm break-words ${
-                              mine ? 'bg-indigo-600 text-white' : 'bg-gray-100'
-                            } ${sameSender && !mine ? 'rounded-t-2xl rounded-bl-md' : ''}`}
-                          >
+                          <div className={`rounded-2xl px-3 py-2 text-sm break-words ${mine ? 'bg-indigo-600 text-white' : 'bg-gray-100'} ${sameSender && !mine ? 'rounded-t-2xl rounded-bl-md' : ''}`}>
                             {m.content}
                           </div>
-                          {mine && (
-                            <div className="text-[10px] text-gray-400 text-right mt-0.5">
-                              {timeStr(m.created_at)}
-                            </div>
-                          )}
+                          {mine && <div className="text-[10px] text-gray-400 text-right mt-0.5">{timeStr(m.created_at)}</div>}
                         </div>
                       </div>
                     </div>

@@ -1,18 +1,64 @@
-// app/profile/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
+type Socials = {
+  website?: string
+  instagram?: string
+  twitter?: string
+  tiktok?: string
+  linkedin?: string
+}
 type Profile = {
   full_name: string
   avatar_url: string | null
   neighborhood: string | null
   bio: string | null
+  is_verified: boolean
+  socials: Socials
 }
 
 const NEIGHBORHOODS = ['RiNo', 'LoHi', 'Five Points'] as const
+const SOCIAL_KEYS: (keyof Socials)[] = ['website','instagram','twitter','tiktok','linkedin']
+
+function VerifiedBadge({ small=false }:{ small?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full ${
+        small ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-0.5 text-sm'
+      } bg-emerald-600/10 text-emerald-700`}
+      title="ID-verified"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" className="fill-current">
+        <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z"/>
+      </svg>
+      <span>Verified</span>
+    </span>
+  )
+}
+
+function VibeChip({ balance }:{ balance: number }) {
+  const tier = balance >= 300 ? 'Rock' : balance >= 150 ? 'Solid' : balance >= 60 ? 'Steady' : 'New'
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-zinc-900 text-white">
+      <span className="font-semibold">{balance} VP</span>
+      <span className="text-xs opacity-80">{tier}</span>
+    </span>
+  )
+}
+
+function normalizeUrl(v?: string | null) {
+  if (!v) return null
+  let s = v.trim()
+  if (!s) return null
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s
+  try {
+    const u = new URL(s)
+    return u.origin + u.pathname.replace(/\/+$/,'')
+  } catch { return null }
+}
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -22,7 +68,10 @@ export default function ProfilePage() {
     avatar_url: null,
     neighborhood: 'RiNo',
     bio: '',
+    is_verified: false,
+    socials: {}
   })
+  const [vp, setVp] = useState<number>(0)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -32,26 +81,34 @@ export default function ProfilePage() {
       if (!user) { router.push('/login'); return }
       setUserId(user.id)
 
-      // Safety net: ensure a row exists (trigger usually creates it)
-      await supabase.from('profiles')
-        .upsert({ id: user.id }, { onConflict: 'id' })
+      // ensure a row exists
+      await supabase.from('profiles').upsert({ id: user.id }, { onConflict: 'id' })
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, avatar_url, neighborhood, bio')
+        .select('full_name, avatar_url, neighborhood, bio, is_verified, socials')
         .eq('id', user.id)
         .maybeSingle()
 
-      if (error) {
-        console.error(error)
-      }
+      if (error) console.error(error)
 
       setP({
         full_name: data?.full_name ?? '',
         avatar_url: data?.avatar_url ?? null,
-        neighborhood: data?.neighborhood ?? 'RiNo',
+        neighborhood: (data?.neighborhood as Profile['neighborhood']) ?? 'RiNo',
         bio: data?.bio ?? '',
+        is_verified: !!data?.is_verified,
+        socials: (data?.socials ?? {}) as Socials
       })
+
+      // VibePoints balance (optional; safe if table exists)
+      const { data: bal } = await supabase
+        .from('vibe_points_balance')
+        .select('balance')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      setVp(bal?.balance ?? 0)
+
       setLoading(false)
     })()
   }, [router])
@@ -61,6 +118,14 @@ export default function ProfilePage() {
     if (!userId) return
     setSaving(true)
 
+    // Clean socials: keep only known keys and valid URLs
+    const cleaned: Socials = {}
+    for (const key of SOCIAL_KEYS) {
+      const raw = (p.socials?.[key] || '').trim()
+      const norm = normalizeUrl(raw)
+      if (norm) cleaned[key] = norm
+    }
+
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -68,6 +133,7 @@ export default function ProfilePage() {
         avatar_url: p.avatar_url,
         neighborhood: p.neighborhood,
         bio: p.bio,
+        socials: cleaned
       })
       .eq('id', userId)
 
@@ -102,18 +168,30 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-4">
-        <img src={avatarSrc} className="w-20 h-20 rounded-full" alt="avatar" />
-        <div>
-          <label className="inline-block px-4 py-2 rounded-lg bg-indigo-50 text-indigo-700 cursor-pointer">
-            Change Avatar
-            <input type="file" accept="image/*" className="hidden" onChange={onPickAvatar} />
-          </label>
-          <div className="text-xs text-gray-500 mt-1">JPG/PNG, ~2MB</div>
+        <img src={avatarSrc} className="w-20 h-20 rounded-full object-cover" alt="avatar" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold truncate">{p.full_name || 'Your profile'}</h1>
+            {p.is_verified && <VerifiedBadge small />}
+          </div>
+          <div className="mt-2">
+            <VibeChip balance={vp} />
+          </div>
         </div>
-        <button onClick={logout} className="ml-auto text-sm text-red-600 hover:underline">Log out</button>
+        {!p.is_verified && (
+          <a
+            href="/verify/start"
+            className="ml-auto rounded-lg bg-emerald-600 text-white px-3 py-2 text-sm hover:bg-emerald-700"
+          >
+            Verify
+          </a>
+        )}
+        <button onClick={logout} className="ml-2 text-sm text-red-600 hover:underline">Log out</button>
       </div>
 
+      {/* Form */}
       <form onSubmit={save} className="space-y-4">
         <div>
           <label className="text-sm text-gray-600">Full name</label>
@@ -145,6 +223,27 @@ export default function ProfilePage() {
           />
         </div>
 
+        {/* Socials */}
+        <div className="grid md:grid-cols-2 gap-4">
+          {SOCIAL_KEYS.map(k => (
+            <label key={k} className="block">
+              <span className="text-sm capitalize">{k}</span>
+              <input
+                className="mt-1 w-full border rounded p-2"
+                placeholder={
+                  k === 'website' ? 'https://your-site.com'
+                    : k === 'instagram' ? 'https://instagram.com/yourhandle'
+                    : k === 'twitter' ? 'https://twitter.com/yourhandle'
+                    : k === 'tiktok' ? 'https://www.tiktok.com/@yourhandle'
+                    : 'https://www.linkedin.com/in/yourhandle'
+                }
+                value={(p.socials?.[k] as string) || ''}
+                onChange={e => setP({ ...p, socials: { ...p.socials, [k]: e.target.value } })}
+              />
+            </label>
+          ))}
+        </div>
+
         <button
           disabled={saving}
           className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl disabled:opacity-50"
@@ -152,6 +251,34 @@ export default function ProfilePage() {
           {saving ? 'Saving…' : 'Save changes'}
         </button>
       </form>
+
+      {/* Preview links */}
+      <div>
+        <h2 className="font-semibold mb-2">Your links</h2>
+        <div className="flex flex-wrap gap-2">
+          {SOCIAL_KEYS.filter(k => p.socials?.[k]).map(k => {
+            const href = p.socials?.[k] as string
+            return (
+              <a
+                key={k}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-sm hover:bg-zinc-50"
+                title={href}
+              >
+                <span>
+                  {k === 'website' ? '🌐' : k === 'instagram' ? '📸' : k === 'twitter' ? '🐦' : k === 'tiktok' ? '🎵' : '💼'}
+                </span>
+                <span className="truncate max-w-[160px]">{new URL(href).hostname}</span>
+              </a>
+            )
+          })}
+          {SOCIAL_KEYS.every(k => !p.socials?.[k]) && (
+            <div className="text-sm text-gray-500">No social links yet.</div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
