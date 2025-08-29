@@ -8,6 +8,7 @@ type Props = {
   mode: 'hosting' | 'joined'
   activity: any
   onChange?: () => void
+  unreadCount?: number
 }
 
 function formatRange(startISO?: string, endISO?: string) {
@@ -43,7 +44,7 @@ function VerifiedBadge({ small=false }:{ small?: boolean }) {
   )
 }
 
-export default function MyPlanCard({ mode, activity: a, onChange }: Props) {
+export default function MyPlanCard({ mode, activity: a, onChange, unreadCount = 0 }: Props) {
   const [busy, setBusy] = useState(false)
 
   const hostName   = a?.host?.full_name ?? 'Host'
@@ -61,7 +62,6 @@ export default function MyPlanCard({ mode, activity: a, onChange }: Props) {
   async function cancelPlan() {
     if (!confirm('Cancel this plan for everyone?')) return
     setBusy(true)
-
     const ok = await tryEndpoint(`/api/plans/${a.id}/cancel`)
     if (!ok) {
       const { data: { user } } = await supabase.auth.getUser()
@@ -79,7 +79,6 @@ export default function MyPlanCard({ mode, activity: a, onChange }: Props) {
   async function leavePlan() {
     if (!confirm('Leave this plan?')) return
     setBusy(true)
-
     const ok = await tryEndpoint(`/api/plans/${a.id}/leave`)
     if (!ok) {
       const { data: { user } } = await supabase.auth.getUser()
@@ -98,8 +97,8 @@ export default function MyPlanCard({ mode, activity: a, onChange }: Props) {
   const actionLabel   = mode === 'hosting' ? 'Cancel' : 'Leave'
   const actionHandler = mode === 'hosting' ? cancelPlan : leavePlan
 
-  // optional unread bubble if your query includes a.unread_count
-  const unread = Number(a?.unread_count ?? 0)
+  // never show unread numbers for canceled activities
+  const unread = isCanceled ? 0 : Number(unreadCount ?? a?.unread_count ?? 0)
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow">
@@ -128,9 +127,7 @@ export default function MyPlanCard({ mode, activity: a, onChange }: Props) {
           {isCanceled && <span className="px-2 py-1 rounded-full bg-rose-100 text-rose-700">Canceled</span>}
         </div>
 
-        {a.description && (
-          <p className="text-sm text-zinc-600 line-clamp-2">{a.description}</p>
-        )}
+        {a.description && <p className="text-sm text-zinc-600 line-clamp-2">{a.description}</p>}
 
         <div className="flex items-center justify-between pt-1">
           <Link href={`/activities/${a.id}`} className="text-sm text-indigo-600 hover:underline">
@@ -140,13 +137,18 @@ export default function MyPlanCard({ mode, activity: a, onChange }: Props) {
           <div className="flex items-center gap-2">
             <Link
               href={`/activity/${a.id}/chat`}
-              className={`relative px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 ${isCanceled ? 'pointer-events-none opacity-50' : ''}`}
+              className={`relative px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 ${
+                isCanceled ? 'pointer-events-none opacity-50' : ''
+              }`}
               title="Open chat"
             >
               Chat
               {unread > 0 && (
-                <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white text-[10px] grid place-items-center">
-                  {unread > 9 ? '9+' : unread}
+                <span
+                  className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white text-[10px] grid place-items-center"
+                  title={`${unread} unread`}
+                >
+                  {unread > 99 ? '99+' : unread}
                 </span>
               )}
             </Link>
@@ -154,7 +156,7 @@ export default function MyPlanCard({ mode, activity: a, onChange }: Props) {
             <button
               disabled={busy || isCanceled}
               onClick={actionHandler}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition border border-zinc-300 text-zinc-800 hover:bg-zinc-50 disabled:opacity-50`}
+              className="px-3 py-2 rounded-lg text-sm font-medium transition border border-zinc-300 text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
               title={mode==='hosting' ? 'Cancel this plan' : 'Leave this plan'}
             >
               {busy ? 'Working…' : actionLabel}

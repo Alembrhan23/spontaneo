@@ -1,0 +1,17 @@
+[
+  { "slug": "nocturne-jazz-supper-club.jpg", "name": "Nocturne Jazz & Supper Club", "site": "https://nocturnejazz.com" },               
+  { "slug": "improper-city.jpg",              "name": "Improper City",                         "site": "https://www.impropercity.com" }, 
+  { "slug": "denver-central-market.jpg",      "name": "Denver Central Market",                 "site": "https://www.denvercentralmarket.com" }, 
+  { "slug": "ratio-beerworks-larimer.jpg",    "name": "Ratio Beerworks (Larimer)",             "site": "https://ratiobeerworks.com" },         
+  { "slug": "meadowlark-bar.jpg",             "name": "Meadowlark Bar",                        "site": "https://meadowlarkbar.com" },          
+  { "slug": "the-marigold-mary-gold.jpg",     "name": "The Marigold (Mary Gold)",              "site": "https://www.marigolddenver.com" },     
+  { "slug": "whittier-cafe.jpg",              "name": "Whittier Cafe",                         "site": "https://www.whittiercafe.com" },       
+  { "slug": "cervantes-masterpiece-ballroom.jpg","name": "Cervantes’ Masterpiece Ballroom",   "site": "https://cervantesmasterpiece.com" },   
+  { "slug": "welton-room-monkey-bar.jpg",     "name": "Welton Room / Monkey Bar",              "site": "https://www.weltonroom.com" },         
+  { "slug": "spangalang-brewery.jpg",         "name": "Spangalang Brewery",                    "site": "http://spangalangbrewery.com" },       
+  { "slug": "avanti-food-beverage-lohi.jpg",  "name": "Avanti Food & Beverage (LoHi)",         "site": "https://www.avantifandb.com" },        
+  { "slug": "room-for-milly.jpg",             "name": "Room for Milly",                        "site": "https://www.roomformilly.com" },      
+  { "slug": "recess-beer-garden.jpg",         "name": "Recess Beer Garden",                    "site": "https://www.recessbeergarden.com" },   
+  { "slug": "happy-camper.jpg",               "name": "Happy Camper (Denver)",                 "site": "https://www.happycamperbars.com/denver" }, 
+  { "slug": "postino-lohi.jpg",               "name": "Postino LoHi",                          "site": "https://www.postinowinecafe.com/location/lohi" } 
+]

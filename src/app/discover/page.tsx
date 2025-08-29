@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import ActivityCard from '@/components/ActivityCard'
-import { PlusCircle, Shuffle, Utensils, Dumbbell } from 'lucide-react'
+import { PlusCircle, Shuffle, Utensils, Dumbbell, Music2, Coffee } from 'lucide-react'
 
 type ActivityRow = {
   id: string
@@ -21,13 +21,7 @@ type ActivityRow = {
   created_at: string | null
   creator_id: string
 }
-
-type ProfileRow = {
-  id: string
-  full_name: string | null
-  avatar_url: string | null
-  is_verified: boolean | null
-}
+type ProfileRow = { id: string; full_name: string | null; avatar_url: string | null; is_verified: boolean | null }
 type ParticipantRow = { activity_id: string; user_id: string }
 
 const quickActions = [
@@ -35,10 +29,25 @@ const quickActions = [
   { icon: Shuffle,   label: 'Surprise Me',  desc: 'Find something random', action: 'surprise' },
   { icon: Utensils,  label: 'Food & Drink', desc: 'Find dining options',   action: 'filter:Food & Drink' },
   { icon: Dumbbell,  label: 'Active',       desc: 'Sports & outdoors',     action: 'filter:Sports' },
+  { icon: Music2,    label: 'Nightlife',    desc: 'Live music & DJs',      action: 'filter:Music & Nightlife' },
+  { icon: Coffee,    label: 'Co-work',      desc: 'Coffee & sprints',      action: 'filter:Coffee & Co-work' },
 ]
 
+// neighborhoods unchanged
 const neighborhoods = ['All Neighborhoods', 'RiNo', 'LoHi', 'Five Points'] as const
-const filters = ['All Activities', 'Outdoors', 'Food & Drink', 'Sports'] as const
+
+// ✅ NEW categories (adds 5 more)
+const filters = [
+  'All Activities',
+  'Outdoors',
+  'Food & Drink',
+  'Sports',
+  'Music & Nightlife',
+  'Arts & Culture',
+  'Games & Trivia',
+  'Wellness',
+  'Coffee & Co-work',
+] as const
 
 export default function DiscoverPage() {
   const router = useRouter()
@@ -57,11 +66,10 @@ export default function DiscoverPage() {
       const currentUserId = user?.id ?? null
       setMe(currentUserId)
 
-      // 1) activities (soonest first)
       const { data: activities, error: e1 } = await supabase
         .from('activities')
         .select('id, title, description, category, neighborhood, location, start_at, max_spots, created_at, creator_id, location_name, location_lat, location_lng')
-        .gte('start_at', new Date(Date.now() - 30 * 60 * 1000).toISOString()) // show near-future & just-started
+        .gte('start_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
         .order('start_at', { ascending: true })
       if (e1) throw e1
       if (!activities?.length) { setRows([]); return }
@@ -69,39 +77,26 @@ export default function DiscoverPage() {
       const ids = activities.map(a => a.id)
       const creatorIds = Array.from(new Set(activities.map(a => a.creator_id)))
 
-      // 2) participants for counts
       let parts: ParticipantRow[] = []
       if (ids.length) {
-        const { data, error } = await supabase
-          .from('activity_participants')
-          .select('activity_id, user_id')
-          .in('activity_id', ids)
+        const { data, error } = await supabase.from('activity_participants').select('activity_id, user_id').in('activity_id', ids)
         if (error) throw error
         parts = data ?? []
       }
 
-      // 3) which activities I joined
       let joinedSet = new Set<string>()
       if (currentUserId) {
-        const { data } = await supabase
-          .from('activity_participants')
-          .select('activity_id')
-          .eq('user_id', currentUserId)
+        const { data } = await supabase.from('activity_participants').select('activity_id').eq('user_id', currentUserId)
         joinedSet = new Set((data ?? []).map(d => d.activity_id))
       }
 
-      // 4) creator profiles (NOTE: include is_verified)
       let profiles: ProfileRow[] = []
       if (creatorIds.length) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url, is_verified')
-          .in('id', creatorIds)
+        const { data, error } = await supabase.from('profiles').select('id, full_name, avatar_url, is_verified').in('id', creatorIds)
         if (error) throw error
         profiles = data ?? []
       }
 
-      // merge
       const byCreator: Record<string, ProfileRow> = Object.fromEntries(profiles.map(p => [p.id, p]))
       const byActCount: Record<string, number> = {}
       parts.forEach(p => { byActCount[p.activity_id] = (byActCount[p.activity_id] ?? 0) + 1 })
@@ -135,13 +130,13 @@ export default function DiscoverPage() {
   function onQuick(action: string) {
     if (action === 'create') router.push('/create')
     else if (action === 'surprise') router.push('/create?surprise=1')
-    else if (action.startsWith('filter:')) setF(action.split(':')[1] as any)
+    else if (action.startsWith('filter:')) setF(action.split(':')[1] as typeof filters[number])
   }
 
   return (
     <div className="space-y-4 pb-24">
       {/* Quick actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {quickActions.map((c) => (
           <button
             key={c.label}
@@ -163,24 +158,20 @@ export default function DiscoverPage() {
           <button
             key={x}
             onClick={() => setN(x)}
-            className={`px-4 py-1 rounded-full text-sm ${
-              n === x ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'
-            }`}
+            className={`px-4 py-1 rounded-full text-sm ${n === x ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}
           >
             {x}
           </button>
         ))}
       </div>
 
-      {/* Activity chips */}
+      {/* Activity chips (now includes 5 new categories) */}
       <div className="flex flex-wrap gap-2">
         {filters.map((x) => (
           <button
             key={x}
             onClick={() => setF(x)}
-            className={`px-4 py-1 rounded-full text-sm ${
-              f === x ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'
-            }`}
+            className={`px-4 py-1 rounded-full text-sm ${f === x ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}
           >
             {x}
           </button>
