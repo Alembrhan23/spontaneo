@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth'
-import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck, LogIn, UserPlus } from 'lucide-react'
+import {
+  ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck, LogIn, UserPlus
+} from 'lucide-react'
 import Link from 'next/link'
 
 export default function LoginClient({ next }: { next: string }) {
@@ -17,13 +19,31 @@ export default function LoginClient({ next }: { next: string }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  // If already logged in (e.g., returned from OAuth), bounce to `next`
+  // If already logged in (e.g. returned from OAuth), go to next
   useEffect(() => {
     if (!loading && user) {
-      router.replace(next)
-      router.refresh()
+      // full reload so server sees cookies/session
+      window.location.assign(next || '/discover')
     }
-  }, [loading, user, router, next])
+  }, [loading, user, next])
+
+  // Also handle OAuth case: when auth state flips to SIGNED_IN, sync cookies then go
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.access_token && session.refresh_token) {
+        await fetch('/auth/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+          }),
+        }).catch(() => {})
+        window.location.assign(next || '/discover')
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [next])
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -37,7 +57,7 @@ export default function LoginClient({ next }: { next: string }) {
       return
     }
 
-    // Bridge the client session to server cookies so RSC/route handlers see it
+    // Bridge client session -> server cookies, then hard-navigate
     const at = data.session?.access_token
     const rt = data.session?.refresh_token
     if (at && rt) {
@@ -45,12 +65,12 @@ export default function LoginClient({ next }: { next: string }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ access_token: at, refresh_token: rt }),
-      })
+      }).catch(() => {})
     }
 
     setBusy(false)
-    router.replace(next)
-    router.refresh()
+    // Use hard navigation so the new cookies are read by the server immediately
+    window.location.assign(next || '/discover')
   }
 
   return (
@@ -63,12 +83,25 @@ export default function LoginClient({ next }: { next: string }) {
             <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600 text-white">⚡</span>
             Spontaneo
           </div>
-          <h1 className="mt-6 text-3xl font-extrabold text-zinc-900 leading-tight">Welcome back.</h1>
-          <p className="mt-2 text-zinc-600">Join or host micro-plans in minutes. Verified people, clear plans, fewer flakes.</p>
+          <h1 className="mt-6 text-3xl font-extrabold text-zinc-900 leading-tight">
+            Welcome back.
+          </h1>
+          <p className="mt-2 text-zinc-600">
+            Join or host micro-plans in minutes. Verified people, clear plans, fewer flakes.
+          </p>
           <ul className="mt-6 space-y-3 text-sm text-zinc-700">
-            <li className="flex items-start gap-2"><ShieldCheck className="w-4 h-4 mt-0.5 text-emerald-600" /><span>Optional ID verification for trust.</span></li>
-            <li className="flex items-start gap-2"><Lock className="w-4 h-4 mt-0.5 text-indigo-600" /><span>Private chat unlocks after you join a plan.</span></li>
-            <li className="flex items-start gap-2"><ArrowRight className="w-4 h-4 mt-0.5 text-violet-600" /><span>RiNo • LoHi • Five Points (Denver beta)</span></li>
+            <li className="flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 mt-0.5 text-emerald-600" />
+              <span>Optional ID verification for trust.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Lock className="w-4 h-4 mt-0.5 text-indigo-600" />
+              <span>Private chat unlocks after you join a plan.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <ArrowRight className="w-4 h-4 mt-0.5 text-violet-600" />
+              <span>RiNo • LoHi • Five Points (Denver beta)</span>
+            </li>
           </ul>
         </div>
 
@@ -78,13 +111,20 @@ export default function LoginClient({ next }: { next: string }) {
             <div className="text-xl font-bold">Log in</div>
             <div className="flex items-center gap-2 text-xs text-zinc-500">
               <span className="hidden sm:inline">No account?</span>
-              <Link href={`/signup?next=${encodeURIComponent(next)}`} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-indigo-700 hover:bg-indigo-50">
+              <Link
+                href={`/signup?next=${encodeURIComponent(next || '/discover')}`}
+                className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-indigo-700 hover:bg-indigo-50"
+              >
                 <UserPlus className="w-3.5 h-3.5" /> Sign up
               </Link>
             </div>
           </div>
 
-          {err && <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{err}</div>}
+          {err && (
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {err}
+            </div>
+          )}
 
           <form onSubmit={onSubmit} className="mt-5 space-y-4">
             <label className="block">
@@ -92,9 +132,14 @@ export default function LoginClient({ next }: { next: string }) {
               <div className="mt-1.5 relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                 <input
-                  type="email" inputMode="email" autoComplete="email" required
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  required
                   className="w-full rounded-xl border bg-white pl-10 pr-3 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500"
-                  placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
             </label>
@@ -104,13 +149,19 @@ export default function LoginClient({ next }: { next: string }) {
               <div className="mt-1.5 relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                 <input
-                  type={showPw ? 'text' : 'password'} autoComplete="current-password" required
+                  type={showPw ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
                   className="w-full rounded-xl border bg-white pl-10 pr-10 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500"
-                  placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
                 <button
-                  type="button" aria-label={showPw ? 'Hide password' : 'Show password'}
-                  onClick={() => setShowPw(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md hover:bg-zinc-100"
+                  type="button"
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowPw(v => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md hover:bg-zinc-100"
                 >
                   {showPw ? <EyeOff className="w-4 h-4 text-zinc-500" /> : <Eye className="w-4 h-4 text-zinc-500" />}
                 </button>
@@ -119,10 +170,16 @@ export default function LoginClient({ next }: { next: string }) {
 
             <div className="flex items-center justify-between">
               <div />
-              <Link href="/reset" className="text-sm text-indigo-700 hover:underline">Forgot password?</Link>
+              <Link href="/reset" className="text-sm text-indigo-700 hover:underline">
+                Forgot password?
+              </Link>
             </div>
 
-            <button type="submit" disabled={busy} className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white py-3 font-medium hover:bg-indigo-700 disabled:opacity-50">
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white py-3 font-medium hover:bg-indigo-700 disabled:opacity-50"
+            >
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
               {busy ? 'Logging in…' : 'Log in'}
             </button>
@@ -140,7 +197,7 @@ export default function LoginClient({ next }: { next: string }) {
               setErr(null); setBusy(true)
               const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
-                options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+                options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next || '/discover')}` },
               })
               setBusy(false)
               if (error) setErr(error.message)
