@@ -3,7 +3,7 @@ import ActivityCard from '@/components/ActivityCard'
 import { getServerUser } from '@/lib/server-user'
 import { redirect } from 'next/navigation'
 
-// Prevent static prerender/SSG for auth-dependent page
+// Guarantee no static prerender for this auth-dependent page
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const revalidate = 0
@@ -26,8 +26,7 @@ export default async function MyPlansPage() {
     .select('activities(*)')
     .eq('user_id', user.id)
 
-  const joinedFlat = (joined ?? [])
-    .map((j: any) => j.activities)
+  const joinedFlat = (joined ?? []).map((j: any) => j.activities).filter(Boolean)
   const all = [...(mine ?? []), ...joinedFlat]
 
   return (
