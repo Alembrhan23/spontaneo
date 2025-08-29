@@ -2,29 +2,30 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// Next.js 15: cookies() is async, so this helper must be async too.
-export async function server() {
+// Create a Supabase server client at request time (Next 15: must await cookies()).
+export async function createClient() {
   const cookieStore = await cookies()
 
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          cookieStore.delete({ name, ...options })
-        },
-      },
-    }
-  )
-}
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anon) {
+    throw new Error(
+      'Supabase env vars missing (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)'
+    )
+  }
 
-// Optional alias so old imports keep working:
-// (You MUST still await it wherever it's called.)
-export const createClient = server
+  return createServerClient(url, anon, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value
+      },
+      set(name: string, value: string, options?: any) {
+        cookieStore.set({ name, value, ...options })
+      },
+      // Use set with an expired date for removal (recommended by Supabase)
+      remove(name: string, options?: any) {
+        cookieStore.set({ name, value: '', ...options, expires: new Date(0) })
+      },
+    },
+  })
+}
