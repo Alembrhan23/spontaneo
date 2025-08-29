@@ -5,22 +5,27 @@ import { redirect } from 'next/navigation'
 import { createServerClient } from '@supabase/ssr'
 import type { Database } from '@/lib/database.types'
 
-export const dynamic = 'force-dynamic' // ⬅️ prevent SSG
+// 🔒 These flags guarantee no static prerender for this page
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
+export const runtime = 'nodejs'
 
 export default async function MyPlansPage() {
   const cookieStore = await cookies()
 
+  // Read env safely
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anon) {
-    // Don’t explode at build/runtime if envs are missing
     return (
       <div className="p-6 text-red-600">
-        Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.
+        Missing Supabase env vars (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY).
       </div>
     )
   }
 
+  // Create the server client at request-time (never at module top-level)
   const supabase = createServerClient<Database>(url, anon, {
     cookies: {
       get: (name) => cookieStore.get(name)?.value,
@@ -33,18 +38,23 @@ export default async function MyPlansPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login?next=/my')
 
+  // Activities I created
   const { data: mine } = await supabase
     .from('activities')
     .select('*')
     .eq('creator_id', user.id)
     .order('start_at', { ascending: false })
 
+  // Activities I joined
   const { data: joined } = await supabase
     .from('activity_attendees')
     .select('activities(*)')
     .eq('user_id', user.id)
 
-  const joinedFlat = (joined ?? []).map((j: any) => j.activities).filter(Boolean)
+  const joinedFlat = (joined ?? [])
+    .map((j: any) => j.activities)
+    .filter(Boolean)
+
   const all = [...(mine ?? []), ...joinedFlat]
 
   return (
