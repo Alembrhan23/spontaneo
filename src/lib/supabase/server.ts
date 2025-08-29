@@ -1,8 +1,12 @@
 // src/lib/supabase/server.ts
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import type { Database } from '@/lib/database.types'
 
-// Create a Supabase server client at request time (Next 15: must await cookies()).
+/**
+ * Create a Supabase server client at request time.
+ * Next 15: you MUST await cookies().
+ */
 export async function createClient() {
   const cookieStore = await cookies()
 
@@ -14,7 +18,7 @@ export async function createClient() {
     )
   }
 
-  return createServerClient(url, anon, {
+  return createServerClient<Database>(url, anon, {
     cookies: {
       get(name: string) {
         return cookieStore.get(name)?.value
@@ -22,10 +26,13 @@ export async function createClient() {
       set(name: string, value: string, options?: any) {
         cookieStore.set({ name, value, ...options })
       },
-      // Use set with an expired date for removal (recommended by Supabase)
       remove(name: string, options?: any) {
+        // Use an expired cookie to remove (Supabase SSR pattern)
         cookieStore.set({ name, value: '', ...options, expires: new Date(0) })
       },
     },
   })
 }
+
+// ✅ Backwards-compatible alias so old imports keep working:
+export const server = createClient

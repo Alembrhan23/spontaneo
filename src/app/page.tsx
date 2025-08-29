@@ -1,18 +1,24 @@
-import Link from "next/link"
-import { redirect } from "next/navigation"
-import { server } from "@/lib/supabase/server" // ← new async server client
+// src/app/page.tsx
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { server } from '@/lib/supabase/server' // async server client
+
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
+export const runtime = 'nodejs'
 
 export const metadata = {
-  title: "Spontaneo — Real people. Real plans. Right now.",
+  title: 'Spontaneo — Real people. Real plans. Right now.',
   description:
-    "Tap to create or join casual micro-plans in Denver’s RiNo, LoHi, and Five Points. Coffee, walks, pickleball, brewery hangs and more. Join → chat → meet.",
+    'Tap to create or join casual micro-plans in Denver’s RiNo, LoHi, and Five Points. Coffee, walks, pickleball, brewery hangs and more. Join → chat → meet.',
 }
 
 export default async function Home() {
   // Logged-in users go straight to Discover
   const supabase = await server()
   const { data: { session } } = await supabase.auth.getSession()
-  if (session) redirect("/discover")
+  if (session) redirect('/discover')
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-indigo-50 via-white to-white">
@@ -59,7 +65,7 @@ export default async function Home() {
           </div>
 
           <div className="mt-7 flex flex-wrap justify-center gap-2 text-sm">
-            {["☕ Coffee", "🏓 Pickleball", "🍻 Breweries", "🐕 Dog walks", "🎲 Trivia", "🖼️ Gallery hops"].map((c) => (
+            {['☕ Coffee', '🏓 Pickleball', '🍻 Breweries', '🐕 Dog walks', '🎲 Trivia', '🖼️ Gallery hops'].map((c) => (
               <span key={c} className="chip">{c}</span>
             ))}
           </div>
@@ -104,15 +110,15 @@ export default async function Home() {
         <h2 className="text-center text-xl sm:text-2xl font-bold text-gray-900">What people spin up</h2>
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            ["☕ Coffee & co-work sprints", "60–90 minute focus bursts with neighbors."],
-            ["🍻 Brewery casuals", "After-work hangs — first-timer friendly."],
-            ["🏓 Pickleball meetups", "Beginners welcome. Rotate in."],
-            ["🐕 Dog walks", "Welton St, Commons Park & more."],
-            ["🎲 Trivia warm-ups", "Form a team in minutes."],
-            ["🖼️ Gallery hops", "Street art + small galleries."],
+            ['☕ Coffee & co-work sprints', '60–90 minute focus bursts with neighbors.'],
+            ['🍻 Brewery casuals', 'After-work hangs — first-timer friendly.'],
+            ['🏓 Pickleball meetups', 'Beginners welcome. Rotate in.'],
+            ['🐕 Dog walks', 'Welton St, Commons Park & more.'],
+            ['🎲 Trivia warm-ups', 'Form a team in minutes.'],
+            ['🖼️ Gallery hops', 'Street art + small galleries.'],
           ].map(([title, desc]) => (
             <div key={title} className="card">
-              <div className="text-2xl">{title.split(" ")[0]}</div>
+              <div className="text-2xl">{title.split(' ')[0]}</div>
               <div>
                 <div className="font-semibold">{title}</div>
                 <div className="text-sm text-gray-600">{desc}</div>
