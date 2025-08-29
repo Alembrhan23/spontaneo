@@ -1,25 +1,45 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import Link from 'next/link'
-import LocationAutocomplete from '@/components/LocationAutocomplete' // ← reuse your existing component
+import LocationAutocomplete from '@/components/LocationAutocomplete'
+
+// Prevent SSG attempts; page reads client-only state
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
+export const runtime = 'nodejs'
 
 export default function SignupPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[calc(100vh-56px)] grid place-items-center bg-gradient-to-b from-indigo-50/60 via-white to-white px-4">
+          <div className="text-sm text-zinc-500">Loading…</div>
+        </div>
+      }
+    >
+      <SignupForm />
+    </Suspense>
+  )
+}
+
+function SignupForm() {
   const router = useRouter()
   const params = useSearchParams()
   const next = params.get('next') || '/discover'
 
   const [fullName, setFullName] = useState('')
-  const [address, setAddress]   = useState('')     // displayed value
-  const [adrLat, setAdrLat]     = useState<number | null>(null) // optional
-  const [adrLng, setAdrLng]     = useState<number | null>(null) // optional
-  const [email, setEmail]       = useState('')
+  const [address, setAddress] = useState('')                 // displayed value
+  const [adrLat, setAdrLat] = useState<number | null>(null)  // optional
+  const [adrLng, setAdrLng] = useState<number | null>(null)  // optional
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [err, setErr]           = useState<string | null>(null)
-  const [info, setInfo]         = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
 
   async function signup(e: React.FormEvent) {
     e.preventDefault()
@@ -34,7 +54,7 @@ export default function SignupPage() {
           data: {
             full_name: fullName,
             address,
-            address_lat: adrLat ?? undefined,  // safe in metadata
+            address_lat: adrLat ?? undefined,
             address_lng: adrLng ?? undefined,
           },
           emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
@@ -45,7 +65,6 @@ export default function SignupPage() {
       // If email confirmation is OFF we already have a session:
       if (data.session?.user?.id) {
         const uid = data.session.user.id
-        // ⚠️ Only store columns that exist in your 'profiles' table
         await supabase
           .from('profiles')
           .upsert({ id: uid, full_name: fullName, address }, { onConflict: 'id' })
@@ -66,10 +85,7 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-[calc(100vh-56px)] grid place-items-center bg-gradient-to-b from-indigo-50/60 via-white to-white px-4">
-      <form
-        onSubmit={signup}
-        className="w-full max-w-xl rounded-2xl border bg-white shadow-sm p-8 md:p-10"
-      >
+      <form onSubmit={signup} className="w-full max-w-xl rounded-2xl border bg-white shadow-sm p-8 md:p-10">
         <div className="mb-6 text-center">
           <div className="inline-flex items-center gap-2 text-indigo-700 font-semibold">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white">⚡</span>
