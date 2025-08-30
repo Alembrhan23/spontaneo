@@ -81,7 +81,7 @@ export default function LoginClient({ next }: { next: string }) {
           <div aria-hidden className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-indigo-300/30 blur-3xl" />
           <div className="flex items-center gap-2 text-sm text-indigo-700 font-semibold">
             <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600 text-white">⚡</span>
-            Spontaneo
+            Nowio
           </div>
           <h1 className="mt-6 text-3xl font-extrabold text-zinc-900 leading-tight">
             Welcome back.

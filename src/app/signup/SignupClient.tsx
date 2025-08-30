@@ -71,7 +71,7 @@ export default function SignupClient() {
         <div className="mb-6 text-center">
           <div className="inline-flex items-center gap-2 text-indigo-700 font-semibold">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white">⚡</span>
-            Spontaneo
+            Nowio
           </div>
         </div>
 
