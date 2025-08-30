@@ -9,7 +9,7 @@ export const revalidate = 0
 export const runtime = 'nodejs'
 
 export const metadata = {
-  title: 'Spontaneo — Real people. Real plans. Right now.',
+  title: 'Nowio — Real people. Real plans. Right now.',
   description:
     'Tap to create or join casual micro-plans in Denver’s RiNo, LoHi, and Five Points. Coffee, walks, pickleball, brewery hangs and more. Join → chat → meet.',
 }
@@ -31,7 +31,7 @@ export default async function Home() {
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-2 text-lg font-bold">
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white">⚡</span>
-            Spontaneo
+            Nowio
           </Link>
           <nav className="flex items-center gap-3">
             <a href="#how" className="nav-link">How it works</a>
@@ -51,7 +51,8 @@ export default async function Home() {
           </div>
 
           <h1 className="mt-5 text-5xl sm:text-6xl font-extrabold tracking-tight text-gray-900">
-            Real people. <span className="text-indigo-600">Real plans.</span> <span className="bg-gradient-to-r from-indigo-600 to-sky-500 bg-clip-text text-transparent">Right now.</span>
+            Real people. <span className="text-indigo-600">Real plans.</span>{' '}
+            <span className="bg-gradient-to-r from-indigo-600 to-sky-500 bg-clip-text text-transparent">Right now.</span>
           </h1>
 
           <p className="mx-auto mt-3 max-w-2xl text-gray-600 text-base sm:text-lg">
@@ -132,10 +133,10 @@ export default async function Home() {
       <footer className="border-t bg-white">
         <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
           <div className="text-sm text-gray-500">
-            Built with ❤️ in Denver • © {new Date().getFullYear()} Spontaneo
+            Built with ❤️ in Denver • © {new Date().getFullYear()} Nowio
           </div>
           <div className="flex items-center gap-4 text-sm">
-            <a href="mailto:hello@spontaneo.app" className="link">Contact</a>
+            <a href="mailto:hello@nowio.app" className="link">Contact</a>
             <Link href="/terms" className="link">Terms</Link>
             <Link href="/privacy" className="link">Privacy</Link>
           </div>
