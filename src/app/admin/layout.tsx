@@ -1,9 +1,15 @@
 // src/app/admin/layout.tsx
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { server } from '@/lib/supabase/server'
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
+export const runtime = 'nodejs'
+
+export default async function AdminLayout({ children }: { children: ReactNode }) {
   const supabase = await server()
 
   const { data: { user } } = await supabase.auth.getUser()

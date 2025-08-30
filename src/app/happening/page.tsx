@@ -42,13 +42,17 @@ export default function HappeningPage() {
 
     const now = new Date()
     const horizon = new Date(now.getTime() + hours * 60 * 60 * 1000)
+    const nowISO = now.toISOString()
+    const horizonISO = horizon.toISOString()
 
-    // 1) events
+    // Fetch events that OVERLAP [now, horizon]:
+    // - started before horizon
+    // - and (end_at >= now  OR (no end_at and starts in the future))
     const { data: evts, error: e1 } = await supabase
       .from('manual_events')
       .select('id,business_id,title,start_at,end_at,url,image_url,price_text,is_free,tags,notes')
-      .gte('start_at', now.toISOString())
-      .lte('start_at', horizon.toISOString())
+      .lte('start_at', horizonISO)
+      .or(`and(end_at.gte.${nowISO}),and(end_at.is.null,start_at.gte.${nowISO})`)
       .order('start_at', { ascending: true })
 
     if (e1) { setErr(e1.message); setLoading(false); return }
@@ -56,7 +60,7 @@ export default function HappeningPage() {
     const eventsData = (evts || []) as EventRow[]
     setEvents(eventsData)
 
-    // 2) businesses we need (include location)
+    // Businesses we need (include location)
     const bizIds = Array.from(new Set(eventsData.map(e => e.business_id)))
     if (bizIds.length === 0) {
       setBizMap({})
@@ -66,7 +70,7 @@ export default function HappeningPage() {
 
     const { data: biz, error: e2 } = await supabase
       .from('businesses')
-      .select('id,name,neighborhood,location')  // <— ensure this column exists
+      .select('id,name,neighborhood,location')
       .in('id', bizIds)
 
     if (e2) { setErr(e2.message); setLoading(false); return }
@@ -95,7 +99,7 @@ export default function HappeningPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hours])
 
-  // realtime refresh
+  // realtime refresh when table changes
   useEffect(() => {
     const ch = supabase
       .channel('happening_events')
@@ -104,6 +108,13 @@ export default function HappeningPage() {
     return () => { supabase.removeChannel(ch) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hours])
+
+  // periodic refresh so items flip from "upcoming" to "ongoing" as time passes
+  useEffect(() => {
+    const id = setInterval(load, 60_000) // 1 min
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, neighborhood])
 
   // filters + groups
   const filtered = useMemo(() => {

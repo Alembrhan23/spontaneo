@@ -73,7 +73,7 @@ export default function NavBar() {
     return (
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3">
-          <Link href="/" className="font-semibold text-indigo-700">⚡ Spontaneo</Link>
+          <Link href="/" className="font-semibold text-indigo-700">⚡ Nowio</Link>
           <div className="ml-auto h-8 w-24 rounded-full bg-zinc-200" />
         </div>
       </header>
@@ -83,7 +83,7 @@ export default function NavBar() {
   return (
     <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3">
-        <Link href={brandHref} className="font-semibold text-indigo-700">⚡ Spontaneo</Link>
+        <Link href={brandHref} className="font-semibold text-indigo-700">⚡ Nowio</Link>
 
         <div className="ml-auto flex items-center gap-2">
           {user && (
