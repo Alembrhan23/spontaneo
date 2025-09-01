@@ -2,17 +2,31 @@
 'use client'
 
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase/client'
 
 export default function Home() {
   const router = useRouter()
 
+  // Block rendering until we know auth state to prevent header “double” flash
+  const [checkingAuth, setCheckingAuth] = useState(true)
+  useEffect(() => {
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        router.replace('/discover')
+        return // do not render this page at all
+      }
+      setCheckingAuth(false)
+    })()
+  }, [router])
+
   // Smooth scroll implementation
   useEffect(() => {
     const header = () => document.querySelector('header') as HTMLElement | null
-    const headerOffset = () => (header()?.getBoundingClientRect().height ?? 80) + 16 // header + breathing room
+    const headerOffset = () =>
+      (header()?.getBoundingClientRect().height ?? 80) + 16 // header + breathing room
 
     const scrollToHash = (hash: string, smooth = true) => {
       const id = decodeURIComponent(hash.replace('#', ''))
@@ -23,7 +37,9 @@ export default function Home() {
     }
 
     const onClick = (e: MouseEvent) => {
-      const a = (e.target as HTMLElement).closest('a[href^="#"]') as HTMLAnchorElement | null
+      const a = (e.target as HTMLElement).closest('a[href^="#"]') as
+        | HTMLAnchorElement
+        | null
       if (!a || !a.hash || a.hash === '#') return
       if (!document.getElementById(a.hash.slice(1))) return
       e.preventDefault()
@@ -39,12 +55,24 @@ export default function Home() {
     return () => document.removeEventListener('click', onClick)
   }, [])
 
+  // While checking auth (or redirecting), render nothing to avoid flicker
+  if (checkingAuth) return null
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-white">
       {/* Background elements */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-white via-indigo-50/20 to-amber-50/20" />
-      <div className="absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50" aria-hidden></div>
-      <div className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-96 h-96 bg-amber-100 rounded-full blur-3xl opacity-40" aria-hidden></div>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-white via-indigo-50/20 to-amber-50/20"
+      />
+      <div
+        className="absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50"
+        aria-hidden
+      ></div>
+      <div
+        className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-96 h-96 bg-amber-100 rounded-full blur-3xl opacity-40"
+        aria-hidden
+      ></div>
 
       {/* ===================== Improved Header ===================== */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
@@ -56,28 +84,37 @@ export default function Home() {
               </div>
               <span className="text-xl font-bold text-gray-900">Nowio</span>
             </Link>
-            
+
             <nav className="hidden md:flex items-center gap-6">
-              <a href="#activities" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">
+              <a
+                href="#activities"
+                className="text-gray-700 hover:text-indigo-600 transition-colors font-medium"
+              >
                 Activities
               </a>
-              <a href="#how" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">
+              <a
+                href="#how"
+                className="text-gray-700 hover:text-indigo-600 transition-colors font-medium"
+              >
                 How It Works
               </a>
-              <a href="#niches" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">
+              <a
+                href="#niches"
+                className="text-gray-700 hover:text-indigo-600 transition-colors font-medium"
+              >
                 Popular Categories
               </a>
             </nav>
-            
+
             <div className="flex items-center gap-3">
-              <Link 
-                href="/login" 
+              <Link
+                href="/login"
                 className="px-4 py-2 text-gray-700 hover:text-indigo-600 font-medium transition-colors"
               >
                 Sign In
               </Link>
-              <Link 
-                href="/signup" 
+              <Link
+                href="/signup"
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
               >
                 Get Started
@@ -88,7 +125,10 @@ export default function Home() {
       </header>
 
       {/* =========================== Hero Section ============================ */}
-      <section id="hero" className="relative mx-auto max-w-6xl px-5 pt-16 sm:pt-20 pb-10 text-center">
+      <section
+        id="hero"
+        className="relative mx-auto max-w-6xl px-5 pt-16 sm:pt-20 pb-10 text-center"
+      >
         <div className="max-w-3xl mx-auto">
           <p className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/90 px-4 py-1.5 text-sm font-medium text-indigo-700 shadow-sm backdrop-blur-sm">
             <span className="relative flex h-2 w-2">
@@ -110,13 +150,13 @@ export default function Home() {
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link 
-              href="/signup" 
+            <Link
+              href="/signup"
               className="relative inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-white transition-all duration-300 bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-xl hover:from-indigo-700 hover:to-indigo-800 hover:shadow-xl hover:-translate-y-0.5 sm:px-8 sm:py-4 sm:text-lg"
             >
               Start Exploring
             </Link>
-            <Link 
+            <Link
               href="/login"
               className="relative inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-gray-900 transition-all duration-300 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:shadow-md sm:px-8 sm:py-4 sm:text-lg"
             >
@@ -140,7 +180,7 @@ export default function Home() {
                   Create a plan <span className="ml-1">→</span>
                 </button>
               </div>
-              
+
               {/* Join Card */}
               <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-6 rounded-xl border border-amber-100">
                 <div className="w-12 h-12 rounded-lg bg-amber-600 flex items-center justify-center text-white text-xl mb-4">
@@ -152,7 +192,7 @@ export default function Home() {
                   Explore activities <span className="ml-1">→</span>
                 </button>
               </div>
-              
+
               {/* Experience Card */}
               <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl border border-green-100">
                 <div className="w-12 h-12 rounded-lg bg-green-600 flex items-center justify-center text-white text-xl mb-4">
@@ -165,7 +205,7 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            
+
             <div className="mt-8 pt-6 border-t border-gray-100">
               <div className="flex flex-wrap justify-center gap-4">
                 {[
@@ -174,9 +214,12 @@ export default function Home() {
                   { emoji: '🍻', label: 'Breweries' },
                   { emoji: '🎨', label: 'Art Walks' },
                   { emoji: '🚶', label: 'Urban Hikes' },
-                  { emoji: '🎲', label: 'Game Nights' }
+                  { emoji: '🎲', label: 'Game Nights' },
                 ].map((item) => (
-                  <div key={item.label} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm">
+                  <div
+                    key={item.label}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm"
+                  >
                     <span>{item.emoji}</span>
                     <span className="font-medium text-gray-700">{item.label}</span>
                   </div>
@@ -191,12 +234,14 @@ export default function Home() {
       <section id="activities" className="py-16 bg-white sm:py-20">
         <div className="max-w-6xl mx-auto px-5">
           <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">What's happening near you</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              What's happening near you
+            </h2>
             <p className="mt-4 text-lg text-gray-600 max-w-3xl mx-auto sm:text-xl">
               Explore activities you can join right now in Denver neighborhoods
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
@@ -205,7 +250,7 @@ export default function Home() {
                 time: 'Today • 10:00 AM',
                 location: 'Thump Coffee • RiNo',
                 attendees: 4,
-                status: 'Open'
+                status: 'Open',
               },
               {
                 emoji: '🏓',
@@ -213,7 +258,7 @@ export default function Home() {
                 time: 'Today • 5:30 PM',
                 location: 'Central Park Courts',
                 attendees: 6,
-                status: 'Almost full'
+                status: 'Almost full',
               },
               {
                 emoji: '🍻',
@@ -221,7 +266,7 @@ export default function Home() {
                 time: 'Tomorrow • 7:00 PM',
                 location: 'Ratio Beerworks',
                 attendees: 3,
-                status: 'Open'
+                status: 'Open',
               },
               {
                 emoji: '🎨',
@@ -229,7 +274,7 @@ export default function Home() {
                 time: 'Fri • 6:00 PM',
                 location: 'Santa Fe Arts District',
                 attendees: 8,
-                status: 'Open'
+                status: 'Open',
               },
               {
                 emoji: '🚶',
@@ -237,7 +282,7 @@ export default function Home() {
                 time: 'Sat • 9:00 AM',
                 location: 'City Park • Five Points',
                 attendees: 5,
-                status: 'Open'
+                status: 'Open',
               },
               {
                 emoji: '🎲',
@@ -245,39 +290,47 @@ export default function Home() {
                 time: 'Sat • 6:30 PM',
                 location: 'The Wizards Chest',
                 attendees: 7,
-                status: 'Almost full'
-              }
+                status: 'Almost full',
+              },
             ].map((activity, index) => (
-              <div key={index} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+              <div
+                key={index}
+                className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow"
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center text-xl">
                     {activity.emoji}
                   </div>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                    activity.status === 'Open' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
+                  <span
+                    className={`text-xs font-medium px-2 py-1 rounded-full ${
+                      activity.status === 'Open'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
                     {activity.status}
                   </span>
                 </div>
-                
+
                 <h3 className="font-semibold text-gray-900 mb-2">{activity.title}</h3>
                 <p className="text-sm text-gray-600 mb-1">{activity.time}</p>
                 <p className="text-sm text-gray-600 mb-4">{activity.location}</p>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="flex -space-x-2">
-                      {[1, 2, 3].map(i => (
-                        <div key={i} className="w-6 h-6 rounded-full bg-gray-300 border-2 border-white"></div>
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="w-6 h-6 rounded-full bg-gray-300 border-2 border-white"
+                        ></div>
                       ))}
                     </div>
                     <span className="text-xs text-gray-500 ml-2">
                       +{activity.attendees} going
                     </span>
                   </div>
-                  
+
                   <button className="text-xs font-medium text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
                     Join
                   </button>
@@ -285,10 +338,10 @@ export default function Home() {
               </div>
             ))}
           </div>
-          
+
           <div className="mt-10 text-center">
-            <Link 
-              href="/login" 
+            <Link
+              href="/login"
               className="inline-flex items-center text-indigo-600 hover:text-indigo-700 font-medium"
             >
               See all activities
@@ -304,12 +357,14 @@ export default function Home() {
       <section id="how" className="py-16 bg-gradient-to-b from-white to-gray-50 sm:py-20">
         <div className="max-w-6xl mx-auto px-5">
           <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Plan → Chat → Meet & Experience</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              Plan → Chat → Meet & Experience
+            </h2>
             <p className="mt-4 text-lg text-gray-600 max-w-3xl mx-auto sm:text-xl">
               Our simple process helps you find activities and connect with people who share your interests
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
             <div className="text-center">
               <div className="mx-auto w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-2xl mb-6">
@@ -317,27 +372,30 @@ export default function Home() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Plan or Find</h3>
               <p className="text-gray-600">
-                Create your own activity or browse existing plans in your neighborhood. Set clear details about what, when, and where.
+                Create your own activity or browse existing plans in your neighborhood. Set clear details about what,
+                when, and where.
               </p>
             </div>
-            
+
             <div className="text-center">
               <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-2xl mb-6">
                 2
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Chat & Connect</h3>
               <p className="text-gray-600">
-                Once you join or host, chat with attendees to coordinate details, ask questions, and get to know each other.
+                Once you join or host, chat with attendees to coordinate details, ask questions, and get to know each
+                other.
               </p>
             </div>
-            
+
             <div className="text-center">
               <div className="mx-auto w-16 h-16 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-2xl mb-6">
                 3
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Meet & Experience</h3>
               <p className="text-gray-600">
-                Show up and enjoy the activity together. Create memories and build connections through shared experiences.
+                Show up and enjoy the activity together. Create memories and build connections through shared
+                experiences.
               </p>
             </div>
           </div>
@@ -353,7 +411,7 @@ export default function Home() {
               Explore activities by category to find what interests you most
             </p>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {[
               { emoji: '☕', label: 'Coffee' },
@@ -369,16 +427,19 @@ export default function Home() {
               { emoji: '🚴', label: 'Cycling' },
               { emoji: '🎥', label: 'Film' },
             ].map((item, index) => (
-              <div key={index} className="flex flex-col items-center p-4 bg-gray-50 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer">
+              <div
+                key={index}
+                className="flex flex-col items-center p-4 bg-gray-50 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer"
+              >
                 <div className="text-2xl mb-2">{item.emoji}</div>
                 <span className="text-sm font-medium text-gray-700 text-center">{item.label}</span>
               </div>
             ))}
           </div>
-          
+
           <div className="mt-10 text-center">
-            <Link 
-              href="/login" 
+            <Link
+              href="/login"
               className="inline-flex items-center text-indigo-600 hover:text-indigo-700 font-medium"
             >
               Explore all categories
@@ -395,11 +456,14 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-5">
           <div className="grid grid-cols-1 gap-10 md:grid-cols-2 items-center">
             <div>
-              <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Can't find what you're looking for?</h2>
+              <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+                Can't find what you're looking for?
+              </h2>
               <p className="mt-4 text-lg text-gray-600 sm:text-xl">
-                Host your own activity and invite others to join. Whether it's a coffee meetup, hiking group, or game night - create the experience you want to have.
+                Host your own activity and invite others to join. Whether it's a coffee meetup, hiking group, or game
+                night - create the experience you want to have.
               </p>
-              
+
               <div className="mt-8 space-y-4">
                 <div className="flex items-center">
                   <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-3">
@@ -409,7 +473,7 @@ export default function Home() {
                   </div>
                   <span className="text-gray-700">Set your own time and location</span>
                 </div>
-                
+
                 <div className="flex items-center">
                   <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-3">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -418,7 +482,7 @@ export default function Home() {
                   </div>
                   <span className="text-gray-700">Define the activity details</span>
                 </div>
-                
+
                 <div className="flex items-center">
                   <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-3">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -428,52 +492,56 @@ export default function Home() {
                   <span className="text-gray-700">Invite others to join you</span>
                 </div>
               </div>
-              
+
               <div className="mt-8">
-                <Link 
-                  href="/signup" 
+                <Link
+                  href="/signup"
                   className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
                 >
                   Create your activity
                 </Link>
               </div>
             </div>
-            
+
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <div className="bg-indigo-50 p-4 rounded-lg mb-6">
                 <h3 className="font-semibold text-indigo-900 mb-2">Activity Idea: Coffee & Cowork</h3>
-                <p className="text-sm text-indigo-700">Bring your laptop and join others for focused work sessions with coffee breaks</p>
+                <p className="text-sm text-indigo-700">
+                  Bring your laptop and join others for focused work sessions with coffee breaks
+                </p>
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Activity Type</label>
                   <div className="flex flex-wrap gap-2">
-                    {['☕ Coffee', '💻 Coworking', '📚 Study Group'].map(tag => (
+                    {['☕ Coffee', '💻 Coworking', '📚 Study Group'].map((tag) => (
                       <span key={tag} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                         {tag}
                       </span>
                     ))}
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <p className="text-sm text-gray-600">Casual coworking session at Thump Coffee. Bring your laptop, we'll take coffee breaks together.</p>
+                  <p className="text-sm text-gray-600">
+                    Casual coworking session at Thump Coffee. Bring your laptop, we'll take coffee breaks together.
+                  </p>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">When</label>
                     <p className="text-sm text-gray-600">Tomorrow, 10AM</p>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Where</label>
                     <p className="text-sm text-gray-600">Thump Coffee, RiNo</p>
                   </div>
                 </div>
-                
+
                 <button className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
                   Create This Activity
                 </button>
@@ -493,13 +561,13 @@ export default function Home() {
             Join the Denver community and discover what's happening right now.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4 sm:mt-10">
-            <Link 
-              href="/signup" 
+            <Link
+              href="/signup"
               className="relative inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-white transition-all duration-300 bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-xl hover:from-indigo-700 hover:to-indigo-800 hover:shadow-xl hover:-translate-y-0.5 sm:px-8 sm:py-4 sm:text-lg"
             >
               Get Started
             </Link>
-            <Link 
+            <Link
               href="/login"
               className="relative inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-gray-900 transition-all duration-300 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:shadow-md sm:px-8 sm:py-4 sm:text-lg"
             >
@@ -519,11 +587,17 @@ export default function Home() {
                 Find what to do and who to do it with • © {new Date().getFullYear()}
               </p>
             </div>
-            
+
             <div className="flex flex-wrap justify-center gap-4 text-xs sm:text-sm sm:gap-6">
-              <a href="mailto:hello@nowio.app" className="text-gray-500 hover:text-gray-700">Contact</a>
-              <Link href="/terms" className="text-gray-500 hover:text-gray-700">Terms</Link>
-              <Link href="/privacy" className="text-gray-500 hover:text-gray-700">Privacy</Link>
+              <a href="mailto:hello@nowio.app" className="text-gray-500 hover:text-gray-700">
+                Contact
+              </a>
+              <Link href="/terms" className="text-gray-500 hover:text-gray-700">
+                Terms
+              </Link>
+              <Link href="/privacy" className="text-gray-500 hover:text-gray-700">
+                Privacy
+              </Link>
             </div>
           </div>
         </div>
