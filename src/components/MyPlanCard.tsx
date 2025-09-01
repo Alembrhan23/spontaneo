@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
+import { ChevronDown } from 'lucide-react'
 
 type Props = {
   mode: 'hosting' | 'joined'
@@ -44,8 +45,30 @@ function VerifiedBadge({ small=false }:{ small?: boolean }) {
   )
 }
 
+/** One-line collapsed, full wrap when expanded */
+function RichText({ text, expanded }: { text: string; expanded: boolean }) {
+  const parts = React.useMemo(() => text.split(/(https?:\/\/[^\s]+)/g), [text])
+  return (
+    <span
+      className={`${expanded ? 'whitespace-pre-wrap break-words' : 'block truncate'}`}
+      style={expanded ? ({ overflowWrap: 'anywhere' } as React.CSSProperties) : undefined}
+    >
+      {parts.map((p, i) =>
+        /^https?:\/\//i.test(p) ? (
+          <a key={i} href={p} target="_blank" rel="noopener noreferrer" className={expanded ? 'underline break-all' : 'underline'}>
+            {p}
+          </a>
+        ) : (
+          <React.Fragment key={i}>{p}</React.Fragment>
+        )
+      )}
+    </span>
+  )
+}
+
 export default function MyPlanCard({ mode, activity: a, onChange, unreadCount = 0 }: Props) {
   const [busy, setBusy] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const hostName   = a?.host?.full_name ?? 'Host'
   const hostAvatar = a?.host?.avatar_url ?? null
@@ -97,7 +120,7 @@ export default function MyPlanCard({ mode, activity: a, onChange, unreadCount = 
   const actionLabel   = mode === 'hosting' ? 'Cancel' : 'Leave'
   const actionHandler = mode === 'hosting' ? cancelPlan : leavePlan
 
-  // never show unread numbers for canceled activities
+  // Never show unread numbers for canceled activities
   const unread = isCanceled ? 0 : Number(unreadCount ?? a?.unread_count ?? 0)
 
   return (
@@ -127,19 +150,29 @@ export default function MyPlanCard({ mode, activity: a, onChange, unreadCount = 
           {isCanceled && <span className="px-2 py-1 rounded-full bg-rose-100 text-rose-700">Canceled</span>}
         </div>
 
-        {a.description && <p className="text-sm text-zinc-600 line-clamp-2">{a.description}</p>}
+        {a.description && (
+          <>
+            <div className="text-sm text-zinc-600">
+              <RichText text={a.description} expanded={expanded} />
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(v => !v)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline"
+            >
+              {expanded ? 'Hide details' : 'Show details'}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+            </button>
+          </>
+        )}
 
         <div className="flex items-center justify-between pt-1">
-          <Link href={`/activities/${a.id}`} className="text-sm text-indigo-600 hover:underline">
-            View details
-          </Link>
+          <Link href={`/activities/${a.id}`} className="text-sm text-indigo-600 hover:underline">View page</Link>
 
           <div className="flex items-center gap-2">
             <Link
               href={`/activity/${a.id}/chat`}
-              className={`relative px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 ${
-                isCanceled ? 'pointer-events-none opacity-50' : ''
-              }`}
+              className={`relative px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 ${isCanceled ? 'pointer-events-none opacity-50' : ''}`}
               title="Open chat"
             >
               Chat

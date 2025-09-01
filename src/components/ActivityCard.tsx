@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { MapPin, Clock, Users } from 'lucide-react'
+import { MapPin, Clock, Users, ChevronDown } from 'lucide-react'
 
 type Props = {
   a: any
@@ -47,8 +47,30 @@ function categoryGradient(cat?: string | null) {
   }
 }
 
+/** Autolink + wrapping for collapsed (1-line) and expanded text */
+function RichText({ text, expanded }: { text: string; expanded: boolean }) {
+  const parts = useMemo(() => text.split(/(https?:\/\/[^\s]+)/g), [text])
+  return (
+    <span
+      className={`${expanded ? 'whitespace-pre-wrap break-words' : 'block truncate'} text-inherit`}
+      style={expanded ? ({ overflowWrap: 'anywhere' } as React.CSSProperties) : undefined}
+    >
+      {parts.map((p, i) =>
+        /^https?:\/\//i.test(p) ? (
+          <a key={i} href={p} target="_blank" rel="noopener noreferrer" className={expanded ? 'underline break-all' : 'underline'}>
+            {p}
+          </a>
+        ) : (
+          <React.Fragment key={i}>{p}</React.Fragment>
+        )
+      )}
+    </span>
+  )
+}
+
 export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) {
   const [loading, setLoading] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const count = typeof a.participants_count === 'number'
     ? a.participants_count
@@ -74,22 +96,19 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
     try { const r = await fetch(`/api/plans/${a.id}/confirm`, { method: 'POST' }); return r.ok } catch { return false }
   }
 
+  // TEMP: skip verification requirement in join()
   async function join() {
     setLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { alert('Please log in.'); return }
 
-      const { data: prof, error: perr } = await supabase
-        .from('profiles').select('is_verified').eq('id', user.id).maybeSingle()
-      if (perr) throw perr
-      if (!prof?.is_verified) { alert('Please verify your identity to join activities.'); window.location.href = '/verify'; return }
-
+      // Try server endpoint; else direct insert (no `state` column)
       const ok = await tryConfirmEndpoint()
       if (!ok) {
         const { error } = await supabase
           .from('activity_participants')
-          .insert({ activity_id: a.id, user_id: user.id, state: 'confirmed' })
+          .insert({ activity_id: a.id, user_id: user.id })
         if (error) throw error
       }
       onJoined?.(a.id)
@@ -100,12 +119,42 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
     }
   }
 
+  async function leave() {
+    if (!confirm('Leave this plan?')) return
+    setLoading(true)
+    try {
+      // Prefer server route if exists
+      let ok = false
+      try {
+        const r = await fetch(`/api/plans/${a.id}/leave`, { method: 'POST' })
+        ok = r.ok
+      } catch { ok = false }
+
+      if (!ok) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Not signed in')
+        const { error } = await supabase
+          .from('activity_participants')
+          .delete()
+          .eq('activity_id', a.id)
+          .eq('user_id', user.id)
+        if (error) throw error
+      }
+
+      onJoined?.(a.id) // refresh list
+    } catch (e: any) {
+      alert(e?.message ?? 'Failed to leave')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="group bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition">
       {/* Gradient ribbon */}
       <div className={`h-1 bg-gradient-to-r ${categoryGradient(a.category)}`} />
 
-      {/* Top row: host + time/neighborhood chips */}
+      {/* Top row: host + chips */}
       <div className="px-4 pt-4 flex items-center gap-3">
         <img src={avatarSrc} className="w-9 h-9 rounded-full object-cover" alt="" />
         <div className="min-w-0">
@@ -128,10 +177,24 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
         </div>
       </div>
 
-      {/* Title + desc */}
+      {/* Title + one-line description (expand to full) */}
       <div className="px-4 mt-3">
         <div className="text-lg font-bold leading-snug">{a.title}</div>
-        {a.description && <div className="text-sm text-gray-700 line-clamp-2 mt-1">{a.description}</div>}
+        {a.description && (
+          <>
+            <div className="text-sm text-gray-700 mt-1">
+              <RichText text={a.description} expanded={expanded} />
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(v => !v)}
+              className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline"
+            >
+              {expanded ? 'Hide details' : 'Show details'}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Time + Place row */}
@@ -190,17 +253,15 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
             Edit Activity
           </Link>
         ) : isJoined ? (
-          <>
-            <button
-              disabled
-              className="w-full bg-indigo-50 text-indigo-700 py-3 rounded-xl font-medium cursor-default"
-            >
-              You’re In
-            </button>
-            <div className="mt-1 text-[11px] text-gray-500 text-center">
-              You’ll earn +20 VP when you check in.
-            </div>
-          </>
+          // WAS: disabled "You're In" — now it's a real Leave action
+          <button
+            onClick={leave}
+            disabled={loading}
+            className="w-full bg-white border border-zinc-300 text-zinc-800 hover:bg-zinc-50 py-3 rounded-xl font-medium disabled:opacity-50"
+            title="Leave this plan"
+          >
+            {loading ? 'Leaving…' : 'Leave'}
+          </button>
         ) : (capacity && spotsLeft === 0) ? (
           <button
             disabled

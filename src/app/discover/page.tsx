@@ -33,10 +33,8 @@ const quickActions = [
   { icon: Coffee,    label: 'Co-work',      desc: 'Coffee & sprints',      action: 'filter:Coffee & Co-work' },
 ]
 
-// neighborhoods unchanged
 const neighborhoods = ['All Neighborhoods', 'RiNo', 'LoHi', 'Five Points'] as const
 
-// ✅ NEW categories (adds 5 more)
 const filters = [
   'All Activities',
   'Outdoors',
@@ -120,12 +118,14 @@ export default function DiscoverPage() {
 
   useEffect(() => { load() }, [])
 
+  // Hide joined activities for logged-in users
   const items = useMemo(() => {
     return rows.filter((a) =>
       (n === 'All Neighborhoods' || a.neighborhood === n) &&
-      (f === 'All Activities'    || a.category === f)
+      (f === 'All Activities'    || a.category === f) &&
+      (!(!!me) || !a._isJoined) // if logged in, hide items you've joined
     )
-  }, [rows, n, f])
+  }, [rows, n, f, me])
 
   function onQuick(action: string) {
     if (action === 'create') router.push('/create')
@@ -165,7 +165,7 @@ export default function DiscoverPage() {
         ))}
       </div>
 
-      {/* Activity chips (now includes 5 new categories) */}
+      {/* Activity category chips */}
       <div className="flex flex-wrap gap-2">
         {filters.map((x) => (
           <button
@@ -189,7 +189,7 @@ export default function DiscoverPage() {
               a={a}
               isOwner={a._isOwner}
               isJoined={a._isJoined}
-              onJoined={load}
+              onJoined={load}   // refresh after join/leave
             />
           ))}
           {items.length === 0 && (

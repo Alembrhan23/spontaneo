@@ -23,15 +23,17 @@ export default function Plans() {
     if (uErr) { setError(uErr.message); setLoading(false); return }
     if (!user) { setHosting([]); setJoined([]); setUnreads({}); setLoading(false); return }
 
-    // HOSTING
+    // HOSTING — exclude deleted & canceled
     const { data: hostRows, error: hErr } = await supabase
       .from('activities')
       .select('*')
       .eq('creator_id', user.id)
+      .neq('status', 'deleted')
+      .neq('status', 'canceled')
       .order('start_at', { ascending: true })
     if (hErr) setError(hErr.message)
 
-    // JOINED (current membership)
+    // JOINED (current membership -> fetch activities; exclude deleted & canceled)
     const { data: myJoins, error: j1Err } = await supabase
       .from('activity_participants')
       .select('activity_id')
@@ -44,6 +46,8 @@ export default function Plans() {
         .from('activities')
         .select('*')
         .in('id', ids)
+        .neq('status', 'deleted')
+        .neq('status', 'canceled')
         .order('start_at', { ascending: true })
       if (j2Err) setError(j2Err.message)
       joinedRows = j2 || []
@@ -61,10 +65,11 @@ export default function Plans() {
 
     const attachHost = (rows:Activity[]) => rows.map(a => ({ ...a, host: pmap.get(a.creator_id) || null }))
 
-    // Exclude canceled from unread math (but you may still render them if you want)
-    const hostWithProfile = attachHost(hostRows || [])
+    const hostWithProfile   = attachHost(hostRows || [])
     const joinedWithProfile = attachHost(joinedRows || [])
-    const activeForUnread = [...hostWithProfile, ...joinedWithProfile].filter(a => a?.status !== 'canceled')
+
+    // For unread math: only consider *active* threads (already filtered above)
+    const activeForUnread = [...hostWithProfile, ...joinedWithProfile]
 
     setHosting(hostWithProfile)
     setJoined(joinedWithProfile)
@@ -115,21 +120,23 @@ export default function Plans() {
 
   useEffect(() => { load() }, [])
 
-  // realtime: refresh on new messages or when reads update
+  // realtime: refresh on new messages, reads, and activity updates/deletes
   useEffect(() => {
     let ch: ReturnType<typeof supabase.channel> | null = null
     ;(async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const refresh = async () => {
-        const allActs = [...hosting, ...joined].filter(a => a?.status !== 'canceled')
+      const refreshUnreads = async () => {
+        const allActs = [...hosting, ...joined] // these are already filtered to active
         if (allActs.length) await computeUnreads(user.id, allActs)
       }
       ch = supabase
         .channel('plans_unreads')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_messages' }, refresh)
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'activity_reads', filter: `user_id=eq.${user.id}` }, refresh)
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'activities' }, refresh) // catch status updates
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_messages' }, refreshUnreads)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'activity_reads', filter: `user_id=eq.${user.id}` }, refreshUnreads)
+        // If an activity is canceled/deleted, reload (it will disappear)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'activities' }, () => load())
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'activities' }, () => load())
         .subscribe()
     })()
     return () => { if (ch) supabase.removeChannel(ch) }
@@ -147,7 +154,7 @@ export default function Plans() {
               mode="hosting"
               activity={a}
               onChange={load}
-              unreadCount={a.status === 'canceled' ? 0 : (unreads[a.id] || 0)}
+              unreadCount={unreads[a.id] || 0}
             />
           ))}
           {!loading && hosting.length===0 && <div className="text-gray-500">You’re not hosting anything yet.</div>}
@@ -164,7 +171,7 @@ export default function Plans() {
               mode="joined"
               activity={a}
               onChange={load}
-              unreadCount={a.status === 'canceled' ? 0 : (unreads[a.id] || 0)}
+              unreadCount={unreads[a.id] || 0}
             />
           ))}
           {!loading && joined.length===0 && <div className="text-gray-500">You haven’t joined any plans yet.</div>}
