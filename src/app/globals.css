@@ -7,4 +7,16 @@ body { @apply bg-gray-50 text-gray-900; }
 
 /* for the chip scrollers I used earlier */
 .no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; 
+
+/* native smooth scroll as a baseline */
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* hide horizontal scrollbar on mobile tab row */
+.no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+
+
+}

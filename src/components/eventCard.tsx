@@ -8,7 +8,7 @@ type Business = {
   name: string
   neighborhood: string
   location?: string | null
-   image_url?: string | null 
+  image_url?: string | null
 }
 
 type EventRow = {
@@ -32,27 +32,24 @@ type Props = {
   isAdmin?: boolean
 }
 
-/* ---------- small helpers ---------- */
+/* ---------- helpers ---------- */
 function fmtTimeLabel(d: Date) {
   const now = new Date()
-  const same = d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate()
-  const tomorrow = new Date(now); tomorrow.setDate(now.getDate()+1)
-  const isTomorrow = d.getFullYear()===tomorrow.getFullYear() && d.getMonth()===tomorrow.getMonth() && d.getDate()===tomorrow.getDate()
+  const same = d.toDateString() === now.toDateString()
+  const tmr = new Date(now); tmr.setDate(now.getDate() + 1)
+  const isTmr = d.toDateString() === tmr.toDateString()
   const t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  if (same) return `${d.getHours()>=17 ? 'Tonight' : 'Today'} • ${t}`
-  if (isTomorrow) return `Tomorrow • ${t}`
-  return `${d.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })} • ${t}`
+  if (same) return `${d.getHours() >= 17 ? 'Tonight' : 'Today'} • ${t}`
+  if (isTmr) return `Tomorrow • ${t}`
+  return `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} • ${t}`
 }
-
 function relStartsIn(start: Date) {
-  const diffMs = start.getTime() - Date.now()
-  if (diffMs <= 0) return null
-  const mins = Math.round(diffMs / 60000)
+  const diff = start.getTime() - Date.now()
+  if (diff <= 0) return null
+  const mins = Math.round(diff / 60000)
   if (mins < 60) return `${mins} min`
-  const h = Math.round(mins / 60)
-  return `${h} hr`
+  return `${Math.round(mins / 60)} hr`
 }
-
 function MapPinIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className ?? 'h-4 w-4 text-rose-600'} fill="currentColor" aria-hidden>
@@ -77,15 +74,16 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
 
   const hero = event.image_url || business?.image_url || null
 
-
-  // counts / state
   useEffect(() => {
     let alive = true
     ;(async () => {
       if (userId) {
         const { data } = await supabase
-          .from('event_interests').select('event_id')
-          .eq('event_id', event.id).eq('user_id', userId).limit(1)
+          .from('event_interests')
+          .select('event_id')
+          .eq('event_id', event.id)
+          .eq('user_id', userId)
+          .limit(1)
         if (!alive) return
         setInterested(!!data?.length)
       }
@@ -100,7 +98,8 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
         const clicks = await supabase
           .from('event_engagements')
           .select('id', { count: 'exact', head: true })
-          .eq('event_id', event.id).eq('action', 'click')
+          .eq('event_id', event.id)
+          .eq('action', 'click')
         if (!alive) return
         setClicksCount(clicks.count ?? 0)
       }
@@ -114,66 +113,71 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
     try {
       if (interested) {
         await supabase.from('event_interests').delete().eq('event_id', event.id).eq('user_id', userId)
-        setInterested(false); setInterestedCount(c => Math.max(0, c-1))
+        setInterested(false); setInterestedCount(c => Math.max(0, c - 1))
       } else {
         const { error } = await supabase.from('event_interests').insert({ event_id: event.id, user_id: userId })
-        if (!error) { setInterested(true); setInterestedCount(c => c+1) }
+        if (!error) { setInterested(true); setInterestedCount(c => c + 1) }
       }
     } finally { setWorking(false) }
   }
-
   async function openDetails() {
     await supabase.from('event_engagements').insert({ event_id: event.id, user_id: userId ?? null, action: 'click' })
     setOpen(true)
   }
-
   async function openTickets() {
     if (!event.url) return
     await supabase.from('event_engagements').insert({ event_id: event.id, user_id: userId ?? null, action: 'click' })
     window.open(event.url, '_blank', 'noopener,noreferrer')
   }
-
   async function share() {
     try {
       const text = `${event.title} — ${business?.name ?? ''} (${business?.neighborhood ?? ''}) ${timeLabel}`
       const shareUrl = location.href
       if (navigator.share) await navigator.share({ title: event.title, text, url: shareUrl })
       else await navigator.clipboard.writeText(`${text}\n${shareUrl}`)
-      setShared(true); setTimeout(()=>setShared(false), 1200)
+      setShared(true); setTimeout(() => setShared(false), 1200)
       await supabase.from('event_engagements').insert({ event_id: event.id, user_id: userId ?? null, action: 'share' })
     } catch {}
   }
 
-  const price = event.is_free ? 'Free' : (event.price_text || '').trim()
+  // Prefer street address for maps, else name + neighborhood
   const mapsQuery = encodeURIComponent(
-    business ? `${business.name}, ${business.location || business.neighborhood || ''}` : event.title
+    business?.location?.trim()
+      ? business.location!.trim()
+      : [business?.name, business?.neighborhood].filter(Boolean).join(', ')
   )
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
+  const price = event.is_free ? 'Free' : (event.price_text || '').trim()
 
   return (
     <>
       <article className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-[2px] hover:shadow-lg">
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100"
-             style={{ background: 'linear-gradient(90deg, rgba(99,102,241,.12), rgba(14,165,233,.12))' }} />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100"
+          style={{ background: 'linear-gradient(90deg, rgba(99,102,241,.12), rgba(14,165,233,.12))' }}
+        />
 
-        <div className="flex gap-3">
-          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border bg-gray-50">
-  {hero ? (
-    <img
-      src={hero}
-      alt={business?.name ? `${business.name} cover` : 'Event image'}
-      loading="lazy"
-      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-    />
-  ) : (
-    <div className="flex h-full w-full items-center justify-center text-xl">📍</div>
-  )}
-</div>
+        {/* Stack on mobile, side-by-side on sm+ */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Image */}
+          <div className="w-full h-40 rounded-xl overflow-hidden border bg-gray-50 sm:h-24 sm:w-24 sm:shrink-0">
+            {hero ? (
+              <img
+                src={hero}
+                alt={business?.name ? `${business.name} cover` : 'Event image'}
+                loading="lazy"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-xl">📍</div>
+            )}
+          </div>
 
-
+          {/* Content */}
           <div className="min-w-0 flex-1">
-            {/* title + happening badge */}
-            <div className="flex items-start gap-2">
+            {/* title + badge */}
+            <div className="flex items-start gap-2 leading-snug">
               <h3 className="truncate text-base font-semibold text-gray-900">{event.title}</h3>
               <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-pink-200 bg-pink-50 px-2 py-0.5 text-[11px] font-medium text-pink-700">
                 <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-pink-600" />
@@ -181,30 +185,35 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
               </span>
             </div>
 
-            {/* business left • address link right */}
-            <div className="mt-0.5 flex items-center gap-2 text-sm">
+            {/* MOBILE: stack business & address  •  DESKTOP: row */}
+            <div className="mt-0.5 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-sm">
               {business && (
-                <div className="min-w-0 flex-1 truncate text-gray-600">
-                  {business.neighborhood} • {business.name}
+                <div className="min-w-0 truncate text-gray-600">
+                  {business.name}{business.neighborhood ? ` • ${business.neighborhood}` : ''}
                 </div>
               )}
-              {business?.location && (
+              {(business?.location || business?.name) && (
                 <a
                   href={mapsUrl}
                   target="_blank"
-                  title={business.location || undefined}
-                  className="shrink-0 inline-flex items-center gap-1 text-indigo-700 hover:underline"
+                  rel="noopener noreferrer"
+                  title={(business?.location || `${business?.name || ''}, ${business?.neighborhood || ''}`) || undefined}
+                  className="inline-flex items-center gap-1 text-indigo-700 hover:underline max-w-full sm:max-w-[260px]"
                 >
                   <MapPinIcon />
-                  <span className="truncate max-w-[180px] sm:max-w-[260px]">{business.location}</span>
+                  <span className="truncate">{business?.location || [business?.name, business?.neighborhood].filter(Boolean).join(', ')}</span>
                 </a>
               )}
             </div>
 
-            {/* time + price + starts in */}
+            {/* time + price */}
             <div className="mt-1 text-sm text-gray-800">
               🕒 {timeLabel}
-              {startsIn ? <span className="ml-2 rounded-full bg-yellow-100 px-2 py-[1px] text-[11px] text-yellow-800">starts in {startsIn}</span> : null}
+              {startsIn ? (
+                <span className="ml-2 rounded-full bg-yellow-100 px-2 py-[1px] text-[11px] text-yellow-800">
+                  starts in {startsIn}
+                </span>
+              ) : null}
               {price ? <span className="ml-2 text-gray-600">• {price}</span> : null}
             </div>
 
@@ -212,10 +221,17 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
             {!!event.tags?.length && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {event.tags.slice(0, 4).map((t) => (
-                  <span key={t} className="rounded-full border border-gray-200 bg-white px-2 py-[2px] text-[11px] text-gray-700">#{t}</span>
+                  <span
+                    key={t}
+                    className="rounded-full border border-gray-200 bg-white px-2 py-[2px] text-[11px] text-gray-700"
+                  >
+                    #{t}
+                  </span>
                 ))}
                 {event.tags.length > 4 && (
-                  <span className="rounded-full border border-gray-200 bg-white px-2 py-[2px] text-[11px] text-gray-500">+{event.tags.length - 4}</span>
+                  <span className="rounded-full border border-gray-200 bg-white px-2 py-[2px] text-[11px] text-gray-500">
+                    +{event.tags.length - 4}
+                  </span>
                 )}
               </div>
             )}
@@ -230,10 +246,16 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
                   ${interested ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'}`}
               >
                 {interested ? 'Interested ✓' : 'I’m interested'}
-                <span className={`rounded-full px-1.5 text-[11px] ${interested ? 'bg-white/20' : 'bg-indigo-100 text-indigo-700'}`}>{interestedCount}</span>
+                <span className={`rounded-full px-1.5 text-[11px] ${interested ? 'bg-white/20' : 'bg-indigo-100 text-indigo-700'}`}>
+                  {interestedCount}
+                </span>
               </button>
 
-              <button type="button" onClick={openDetails} className="inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+              <button
+                type="button"
+                onClick={openDetails}
+                className="inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+              >
                 Details
               </button>
 
@@ -247,7 +269,11 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
                 </button>
               ) : null}
 
-              <button type="button" onClick={share} className="inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+              <button
+                type="button"
+                onClick={share}
+                className="inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+              >
                 {shared ? 'Copied! ✅' : 'Share'}
               </button>
 
@@ -261,23 +287,37 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
       {open && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="relative z-[71] w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl">
+          <div
+            className="relative z-[71] w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl max-h-[85vh] overflow-y-auto"
+            role="dialog" aria-modal="true" aria-label="Event details"
+          >
             <div className="flex items-start gap-3">
               {event.image_url
                 ? <img src={event.image_url} alt="" className="h-20 w-20 rounded-lg object-cover border" />
                 : <div className="h-20 w-20 rounded-lg border grid place-items-center">📍</div>}
               <div className="min-w-0">
-                <div className="text-lg font-semibold">{event.title}</div>
-                {business && <div className="text-sm text-gray-600">{business.neighborhood} • {business.name}</div>}
-                {business?.location && (
-                  <a href={mapsUrl} target="_blank" title={business.location || undefined}
-                     className="mt-1 inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline">
+                <div className="text-lg font-semibold leading-snug">{event.title}</div>
+                {business && (
+                  <div className="text-sm text-gray-600">
+                    {business.name}{business.neighborhood ? ` • ${business.neighborhood}` : ''}
+                  </div>
+                )}
+                {(business?.location || business?.name) && (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={(business?.location || `${business?.name || ''}, ${business?.neighborhood || ''}`) || undefined}
+                    className="mt-1 inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline max-w-full"
+                  >
                     <MapPinIcon />
-                    <span className="truncate">{business.location}</span>
+                    <span className="truncate">{business?.location || [business?.name, business?.neighborhood].filter(Boolean).join(', ')}</span>
                   </a>
                 )}
               </div>
-              <button className="ml-auto rounded-full border px-2 py-1 text-sm" onClick={() => setOpen(false)}>Close</button>
+              <button className="ml-auto rounded-full border px-2 py-1 text-sm" onClick={() => setOpen(false)} aria-label="Close">
+                Close
+              </button>
             </div>
 
             <div className="mt-3 text-sm text-gray-800">
@@ -286,7 +326,6 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
             {(event.is_free || event.price_text) && (
               <div className="mt-1 text-sm text-gray-700">{event.is_free ? 'Free' : event.price_text}</div>
             )}
-
             {!!event.tags?.length && (
               <div className="mt-3 flex flex-wrap gap-1">
                 {event.tags.map((t) => (
@@ -294,8 +333,7 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
                 ))}
               </div>
             )}
-
-            {event.notes ? <div className="mt-3 text-sm text-gray-700 whitespace-pre-wrap">{event.notes}</div> : null}
+            {event.notes ? <div className="mt-3 text-sm text-gray-700 whitespace-pre-wrap break-words">{event.notes}</div> : null}
 
             <div className="mt-4 flex gap-2">
               {event.url ? (

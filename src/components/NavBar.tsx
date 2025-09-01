@@ -15,20 +15,17 @@ function useHasMounted() {
 }
 
 export default function NavBar() {
-  const pathname = usePathname()
+  const pathname = usePathname() || '/'
   const router = useRouter()
   const { user, profile, loading } = useAuth()
   const hasMounted = useHasMounted()
 
-  // Hooks must always run
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // Close dropdown on route change
   useEffect(() => { setMenuOpen(false) }, [pathname])
 
-  // Click-outside to close
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!menuRef.current || menuRef.current.contains(e.target as Node)) return
@@ -38,7 +35,6 @@ export default function NavBar() {
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
-  // Shortcut for search (guard inside)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!user) return
@@ -62,13 +58,18 @@ export default function NavBar() {
     profile?.avatar_url ||
     `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(profile?.full_name || 'U')}`
 
-  const brandHref = user ? '/discover' : '/'
+  const onAuthRoute = /^\/(login|signup|verify|reset|auth|logout)(\/|$)/.test(pathname)
 
-  // Hide NavBar entirely on Home when signed out (after hooks have run)
+  // Brand behavior:
+  // - signed in → /discover
+  // - signed out on home → smooth to #hero
+  // - signed out elsewhere → navigate to /#hero
+  const brandHref = user ? '/discover' : (pathname === '/' ? '#hero' : '/#hero')
+
+  // Keep your existing behavior: hide NavBar on home when signed out
   const hideOnHome = !user && pathname === '/'
   if (hideOnHome) return null
 
-  // During SSR/first client render, show a stable skeleton to avoid mismatches
   if (!hasMounted) {
     return (
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
@@ -130,20 +131,23 @@ export default function NavBar() {
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <Link
-                href="/login"
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
-              >
-                <LogIn className="w-4 h-4" /> Log in
-              </Link>
-              <Link
-                href="/signup"
-                className="px-3 py-1.5 rounded-lg border bg-white hover:bg-zinc-50"
-              >
-                Sign up
-              </Link>
-            </div>
+            // Hide CTAs on auth routes; use tighter sizing for mobile
+            !onAuthRoute && (
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/login"
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  <LogIn className="w-4 h-4" /> Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="px-2.5 py-1.5 text-sm rounded-lg border bg-white hover:bg-zinc-50"
+                >
+                  Sign up
+                </Link>
+              </div>
+            )
           )}
         </div>
       </div>
