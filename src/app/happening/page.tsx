@@ -4,7 +4,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import EventCard from '@/components/eventCard'
 
-type Business = { id: string; name: string; neighborhood: string; location?: string | null }
+type Business = {
+  id: string
+  name: string
+  neighborhood: string
+  location?: string | null
+  image_url?: string | null      // added
+  image_path?: string | null     // added
+}
+
 type EventRow = {
   id: string
   business_id: string
@@ -13,6 +21,7 @@ type EventRow = {
   end_at: string | null
   url: string | null
   image_url: string | null
+  image_path?: string | null     // optional (safe even if column is missing)
   price_text: string | null
   is_free: boolean
   tags: string[] | null
@@ -45,9 +54,7 @@ export default function HappeningPage() {
     const nowISO = now.toISOString()
     const horizonISO = horizon.toISOString()
 
-    // Fetch events that OVERLAP [now, horizon]:
-    // - started before horizon
-    // - and (end_at >= now  OR (no end_at and starts in the future))
+    // Fetch events that OVERLAP [now, horizon]
     const { data: evts, error: e1 } = await supabase
       .from('manual_events')
       .select('id,business_id,title,start_at,end_at,url,image_url,price_text,is_free,tags,notes')
@@ -60,7 +67,7 @@ export default function HappeningPage() {
     const eventsData = (evts || []) as EventRow[]
     setEvents(eventsData)
 
-    // Businesses we need (include location)
+    // Businesses we need (include location + image fields)
     const bizIds = Array.from(new Set(eventsData.map(e => e.business_id)))
     if (bizIds.length === 0) {
       setBizMap({})
@@ -70,7 +77,7 @@ export default function HappeningPage() {
 
     const { data: biz, error: e2 } = await supabase
       .from('businesses')
-      .select('id,name,neighborhood,location')
+      .select('id,name,neighborhood,location,image_url,image_path') // added fields
       .in('id', bizIds)
 
     if (e2) { setErr(e2.message); setLoading(false); return }
@@ -109,7 +116,7 @@ export default function HappeningPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hours])
 
-  // periodic refresh so items flip from "upcoming" to "ongoing" as time passes
+  // periodic refresh so items flip from "upcoming" to "ongoing"
   useEffect(() => {
     const id = setInterval(load, 60_000) // 1 min
     return () => clearInterval(id)
@@ -182,9 +189,11 @@ export default function HappeningPage() {
         <h1 className="text-2xl font-bold">Happening (next {hours}h)</h1>
         <div className="ml-auto flex gap-2">
           {HOUR_PRESETS.map(h => (
-            <button key={h}
+            <button
+              key={h}
               onClick={() => setHours(h)}
-              className={`border rounded px-3 py-1 text-sm ${hours===h ? 'bg-black text-white' : ''}`}>
+              className={`border rounded px-3 py-1 text-sm ${hours===h ? 'bg-black text-white' : ''}`}
+            >
               {h}h
             </button>
           ))}
@@ -193,9 +202,11 @@ export default function HappeningPage() {
 
       <div className="flex gap-2">
         {['', ...MVP_NEIGHBORHOODS].map(n => (
-          <button key={n || 'all'}
+          <button
+            key={n || 'all'}
             onClick={() => setNeighborhood(n)}
-            className={`border rounded px-3 py-1 text-sm ${neighborhood===n ? 'bg-black text-white' : ''}`}>
+            className={`border rounded px-3 py-1 text-sm ${neighborhood===n ? 'bg-black text-white' : ''}`}
+          >
             {n || 'All neighborhoods'}
           </button>
         ))}
@@ -226,7 +237,7 @@ export default function HappeningPage() {
                 <EventCard
                   key={e.id}
                   event={e}
-                  business={bizMap[e.business_id]}
+                  business={bizMap[e.business_id]}   // now includes image_url & image_path
                   userId={userId}
                   isAdmin={isAdmin}
                 />

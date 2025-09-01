@@ -9,6 +9,7 @@ type Business = {
   neighborhood: string
   location?: string | null
   image_url?: string | null
+  image_path?: string | null   // added
 }
 
 type EventRow = {
@@ -19,6 +20,7 @@ type EventRow = {
   end_at?: string | null
   url?: string | null
   image_url?: string | null
+  image_path?: string | null    // optional, added
   price_text?: string | null
   is_free?: boolean
   tags?: string[] | null
@@ -58,6 +60,8 @@ function MapPinIcon({ className }: { className?: string }) {
   )
 }
 
+const BUCKET = 'business-images' // your Storage bucket
+
 /* ---------- component ---------- */
 export default function EventCard({ event, business, userId, isAdmin }: Props) {
   const start = useMemo(() => new Date(event.start_at), [event.start_at])
@@ -72,7 +76,55 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
   const [shared, setShared] = useState(false)
   const [open, setOpen] = useState(false)
 
-  const hero = event.image_url || business?.image_url || null
+  // ---- hero image resolution (event → business → storage path) ----
+  const [heroUrl, setHeroUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function resolveHero() {
+      // 1) direct URLs first (no storage calls)
+      if (event.image_url) { setHeroUrl(event.image_url); return }
+      if (business?.image_url) { setHeroUrl(business.image_url); return }
+
+      // 2) try paths already on the props
+      const path = event.image_path || business?.image_path
+      if (path) {
+        // prefer public URL if bucket is public; else signed URL
+        const pub = supabase.storage.from(BUCKET).getPublicUrl(path)
+        if (pub?.data?.publicUrl) { setHeroUrl(pub.data.publicUrl); return }
+        const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 60)
+        if (!cancelled) setHeroUrl(data?.signedUrl ?? null)
+        return
+      }
+
+      // 3) fetch image fields from DB (in case parent didn’t provide them)
+      const bizId = business?.id ?? event.business_id
+      if (!bizId) { setHeroUrl(null); return }
+
+      const { data: biz, error } = await supabase
+        .from('businesses')
+        .select('image_url, image_path')
+        .eq('id', bizId)
+        .maybeSingle()
+
+      if (cancelled || error || !biz) { if (!cancelled) setHeroUrl(null); return }
+
+      if (biz.image_url) { setHeroUrl(biz.image_url); return }
+      if (biz.image_path) {
+        const pub2 = supabase.storage.from(BUCKET).getPublicUrl(biz.image_path)
+        if (pub2?.data?.publicUrl) { setHeroUrl(pub2.data.publicUrl); return }
+        const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(biz.image_path, 60 * 60)
+        if (!cancelled) setHeroUrl(signed?.signedUrl ?? null)
+        return
+      }
+
+      if (!cancelled) setHeroUrl(null)
+    }
+
+    resolveHero()
+    return () => { cancelled = true }
+  }, [event.image_url, event.image_path, business?.image_url, business?.image_path, business?.id, event.business_id])
 
   useEffect(() => {
     let alive = true
@@ -140,7 +192,6 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
     } catch {}
   }
 
-  // Prefer street address for maps, else name + neighborhood
   const mapsQuery = encodeURIComponent(
     business?.location?.trim()
       ? business.location!.trim()
@@ -158,13 +209,12 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
           style={{ background: 'linear-gradient(90deg, rgba(99,102,241,.12), rgba(14,165,233,.12))' }}
         />
 
-        {/* Stack on mobile, side-by-side on sm+ */}
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Image */}
           <div className="w-full h-40 rounded-xl overflow-hidden border bg-gray-50 sm:h-24 sm:w-24 sm:shrink-0">
-            {hero ? (
+            {heroUrl ? (
               <img
-                src={hero}
+                src={heroUrl}
                 alt={business?.name ? `${business.name} cover` : 'Event image'}
                 loading="lazy"
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -176,7 +226,6 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
 
           {/* Content */}
           <div className="min-w-0 flex-1">
-            {/* title + badge */}
             <div className="flex items-start gap-2 leading-snug">
               <h3 className="truncate text-base font-semibold text-gray-900">{event.title}</h3>
               <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-pink-200 bg-pink-50 px-2 py-0.5 text-[11px] font-medium text-pink-700">
@@ -185,7 +234,6 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
               </span>
             </div>
 
-            {/* MOBILE: stack business & address  •  DESKTOP: row */}
             <div className="mt-0.5 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-sm">
               {business && (
                 <div className="min-w-0 truncate text-gray-600">
@@ -206,7 +254,6 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
               )}
             </div>
 
-            {/* time + price */}
             <div className="mt-1 text-sm text-gray-800">
               🕒 {timeLabel}
               {startsIn ? (
@@ -217,16 +264,10 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
               {price ? <span className="ml-2 text-gray-600">• {price}</span> : null}
             </div>
 
-            {/* tags */}
             {!!event.tags?.length && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {event.tags.slice(0, 4).map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full border border-gray-200 bg-white px-2 py-[2px] text-[11px] text-gray-700"
-                  >
-                    #{t}
-                  </span>
+                  <span key={t} className="rounded-full border border-gray-200 bg-white px-2 py-[2px] text-[11px] text-gray-700">#{t}</span>
                 ))}
                 {event.tags.length > 4 && (
                   <span className="rounded-full border border-gray-200 bg-white px-2 py-[2px] text-[11px] text-gray-500">
@@ -236,7 +277,6 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
               </div>
             )}
 
-            {/* actions */}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -292,8 +332,8 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
             role="dialog" aria-modal="true" aria-label="Event details"
           >
             <div className="flex items-start gap-3">
-              {event.image_url
-                ? <img src={event.image_url} alt="" className="h-20 w-20 rounded-lg object-cover border" />
+              {heroUrl
+                ? <img src={heroUrl} alt="" className="h-20 w-20 rounded-lg object-cover border" />
                 : <div className="h-20 w-20 rounded-lg border grid place-items-center">📍</div>}
               <div className="min-w-0">
                 <div className="text-lg font-semibold leading-snug">{event.title}</div>
@@ -304,10 +344,9 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
                 )}
                 {(business?.location || business?.name) && (
                   <a
-                    href={mapsUrl}
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business?.location || [business?.name, business?.neighborhood].filter(Boolean).join(', '))}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    title={(business?.location || `${business?.name || ''}, ${business?.neighborhood || ''}`) || undefined}
                     className="mt-1 inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline max-w-full"
                   >
                     <MapPinIcon />
