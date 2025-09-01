@@ -1,45 +1,47 @@
-// src/app/auth/callback/route.ts
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 
-export async function GET(request: Request) {
-  const url = new URL(request.url)
+export async function GET(req: Request) {
+  const url = new URL(req.url)
   const next = url.searchParams.get('next') || '/discover'
   const type = (url.searchParams.get('type') || '').toLowerCase()
 
-  const cookieStore = await cookies()
+  // Decide where we want to end up FIRST and create the response up front.
+  const target =
+    type === 'recovery' ? '/reset' :
+    type === 'signup'   ? `/login?verified=1&next=${encodeURIComponent(next)}` :
+    next
+
+  const res = NextResponse.redirect(new URL(target, url.origin))
+  res.headers.set('Cache-Control', 'no-store')
+
+  // Use the cookies() store for reading,
+  // but WRITE cookies on the Response we are returning (res.cookies.set).
+  const cookieStore = cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get: (name) => cookieStore.get(name)?.value,
-        set: (name, value, options) => cookieStore.set({ name, value, ...options }),
+        set: (name, value, options) => res.cookies.set({ name, value, ...options }),
         remove: (name, options) =>
-          cookieStore.set({ name, value: '', ...options, expires: new Date(0) }),
+          res.cookies.set({ name, value: '', ...options, expires: new Date(0) }),
       },
     }
   )
 
-  // Exchange the auth code in the URL for a session (sets cookies)
   try {
-    await supabase.auth.exchangeCodeForSession(request.url)
+    // This will set the auth cookies on *res* via the adapter above
+    await supabase.auth.exchangeCodeForSession(req.url)
   } catch {
-    // swallow; we'll still continue with redirects below
+    // ignore — we still redirect to target
   }
 
   if (type === 'signup') {
-    await supabase.auth.signOut()
-    const loginUrl = new URL('/login', url.origin)
-    loginUrl.searchParams.set('verified', '1')
-    loginUrl.searchParams.set('next', next)
-    return NextResponse.redirect(loginUrl)
+    try { await supabase.auth.signOut() } catch {}
   }
 
-  if (type === 'recovery') {
-    return NextResponse.redirect(new URL('/reset', url.origin))
-  }
-
-  return NextResponse.redirect(new URL(next, url.origin))
+  return res
 }
