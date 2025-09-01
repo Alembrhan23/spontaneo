@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth'
 import {
@@ -9,41 +8,66 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 
-export default function LoginClient({ next }: { next: string }) {
-  const router = useRouter()
+type Props = { next: string }
+
+function baseUrl() {
+  if (typeof window !== 'undefined') return window.location.origin.replace(/\/$/, '')
+  return (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+}
+
+/** Only allow same-origin paths; fall back to /discover */
+function sanitizeNext(n?: string | null) {
+  const fallback = '/discover'
+  if (!n) return fallback
+  try {
+    // Absolute URL: must be same origin
+    if (/^https?:\/\//i.test(n)) {
+      const u = new URL(n, baseUrl())
+      return u.origin === baseUrl() ? (u.pathname + u.search + u.hash || fallback) : fallback
+    }
+    // Relative URL: ensure it starts with /
+    return n.startsWith('/') ? n : `/${n}`
+  } catch {
+    return fallback
+  }
+}
+
+export default function LoginClient({ next }: Props) {
   const { user, loading } = useAuth()
 
+  const safeNext = useMemo(() => sanitizeNext(next), [next])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  // If already logged in (e.g. returned from OAuth), go to next
+  // If already logged in (e.g., returned from OAuth), go to next.
   useEffect(() => {
     if (!loading && user) {
-      // full reload so server sees cookies/session
-      window.location.assign(next || '/discover')
+      window.location.replace(safeNext)
     }
-  }, [loading, user, next])
+  }, [loading, user, safeNext])
 
   // Also handle OAuth case: when auth state flips to SIGNED_IN, sync cookies then go
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.access_token && session.refresh_token) {
-        await fetch('/auth/set', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-          }),
-        }).catch(() => {})
-        window.location.assign(next || '/discover')
+        try {
+          await fetch('/auth/set', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              access_token: session.access_token,
+              refresh_token: session.refresh_token,
+            }),
+          })
+        } catch { /* ignore */ }
+        window.location.replace(safeNext)
       }
     })
     return () => subscription.unsubscribe()
-  }, [next])
+  }, [safeNext])
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -61,16 +85,17 @@ export default function LoginClient({ next }: { next: string }) {
     const at = data.session?.access_token
     const rt = data.session?.refresh_token
     if (at && rt) {
-      await fetch('/auth/set', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: at, refresh_token: rt }),
-      }).catch(() => {})
+      try {
+        await fetch('/auth/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: at, refresh_token: rt }),
+        })
+      } catch { /* ignore */ }
     }
 
-    setBusy(false)
-    // Use hard navigation so the new cookies are read by the server immediately
-    window.location.assign(next || '/discover')
+    // Hard navigation so SSR reads cookies immediately
+    window.location.replace(safeNext)
   }
 
   return (
@@ -112,7 +137,7 @@ export default function LoginClient({ next }: { next: string }) {
             <div className="flex items-center gap-2 text-xs text-zinc-500">
               <span className="hidden sm:inline">No account?</span>
               <Link
-                href={`/signup?next=${encodeURIComponent(next || '/discover')}`}
+                href={`/signup?next=${encodeURIComponent(safeNext)}`}
                 className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-indigo-700 hover:bg-indigo-50"
               >
                 <UserPlus className="w-3.5 h-3.5" /> Sign up
@@ -121,7 +146,7 @@ export default function LoginClient({ next }: { next: string }) {
           </div>
 
           {err && (
-            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert" aria-live="polite">
               {err}
             </div>
           )}
@@ -132,11 +157,13 @@ export default function LoginClient({ next }: { next: string }) {
               <div className="mt-1.5 relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                 <input
+                  name="email"
                   type="email"
                   inputMode="email"
                   autoComplete="email"
                   required
-                  className="w-full rounded-xl border bg-white pl-10 pr-3 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500"
+                  disabled={busy}
+                  className="w-full rounded-xl border bg-white pl-10 pr-3 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500 disabled:bg-zinc-50"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -149,10 +176,12 @@ export default function LoginClient({ next }: { next: string }) {
               <div className="mt-1.5 relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                 <input
+                  name="password"
                   type={showPw ? 'text' : 'password'}
                   autoComplete="current-password"
                   required
-                  className="w-full rounded-xl border bg-white pl-10 pr-10 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500"
+                  disabled={busy}
+                  className="w-full rounded-xl border bg-white pl-10 pr-10 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500 disabled:bg-zinc-50"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -161,7 +190,8 @@ export default function LoginClient({ next }: { next: string }) {
                   type="button"
                   aria-label={showPw ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPw(v => !v)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md hover:bg-zinc-100"
+                  disabled={busy}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md hover:bg-zinc-100 disabled:opacity-50"
                 >
                   {showPw ? <EyeOff className="w-4 h-4 text-zinc-500" /> : <Eye className="w-4 h-4 text-zinc-500" />}
                 </button>
@@ -178,6 +208,7 @@ export default function LoginClient({ next }: { next: string }) {
             <button
               type="submit"
               disabled={busy}
+              aria-busy={busy}
               className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white py-3 font-medium hover:bg-indigo-700 disabled:opacity-50"
             >
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
@@ -195,14 +226,25 @@ export default function LoginClient({ next }: { next: string }) {
             type="button"
             onClick={async () => {
               setErr(null); setBusy(true)
-              const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next || '/discover')}` },
-              })
-              setBusy(false)
-              if (error) setErr(error.message)
+              try {
+                const redirectTo = `${baseUrl()}/auth/callback?next=${encodeURIComponent(safeNext)}`
+                const { error } = await supabase.auth.signInWithOAuth({
+                  provider: 'google',
+                  options: {
+                    redirectTo,
+                    queryParams: { prompt: 'select_account' },
+                  },
+                })
+                if (error) setErr(error.message)
+              } catch (e: any) {
+                setErr(e?.message || 'Failed to start Google sign-in.')
+              } finally {
+                // If OAuth succeeds, the browser will navigate away; we only clear busy if there was an error.
+                setBusy(false)
+              }
             }}
-            className="w-full rounded-xl border bg-white py-3 font-medium hover:bg-zinc-50"
+            disabled={busy}
+            className="w-full rounded-xl border bg-white py-3 font-medium hover:bg-zinc-50 disabled:opacity-50"
           >
             Continue with Google
           </button>
