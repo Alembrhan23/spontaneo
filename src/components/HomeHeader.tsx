@@ -1,112 +1,94 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useAuth } from '@/lib/auth'
 
+/**
+ * Marketing header for the home page.
+ * Renders ONLY when the user is signed out (no double headers).
+ */
 export default function HomeHeader() {
+  const { user, loading } = useAuth()
   const [open, setOpen] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
 
-  // Close on ESC + when a hash link is used
+  // Don’t render while auth is loading to prevent a brief double-header flash.
+  if (loading || user) return null
+
+  // Close mobile panel on outside click
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
-    const onHash = () => setOpen(false)
-    window.addEventListener('keydown', onKey)
-    window.addEventListener('hashchange', onHash)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('hashchange', onHash)
+    const onDoc = (e: MouseEvent) => {
+      if (!panelRef.current) return
+      if (!panelRef.current.contains(e.target as Node)) setOpen(false)
     }
-  }, [])
-
-  // Lock body scroll when sheet is open
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = open ? 'hidden' : prev
-    return () => { document.body.style.overflow = prev }
+    if (open) document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
   return (
-    <header className="sticky top-0 z-30 border-b bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-3">
-        {/* Brand → hero */}
-        <a href="#hero" className="flex items-center gap-2 text-lg font-semibold">
-          <span className="inline-grid h-7 w-7 place-items-center rounded-md bg-indigo-600 text-white">⚡</span>
-          Nowio
-        </a>
+    <header className="sticky top-0 z-40 w-full border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 py-3">
+        <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600 text-white">N</span>
+          <span>Nowio</span>
+        </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden sm:flex items-center gap-2">
-          <a href="#how" className="nav-link">How it works</a>
-          <a href="#niches" className="nav-link">Niches</a>
-          <Link href="/login"  className="px-3 py-2 text-sm font-semibold rounded-lg border hover:bg-zinc-50">
-            Log in
-          </Link>
-          <Link href="/signup" className="px-3 py-2 text-sm font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm">
-            Sign up
-          </Link>
+        <nav className="hidden md:flex items-center gap-6 text-sm">
+          <a href="#how" className="text-gray-700 hover:text-gray-900">How It Works</a>
+          <a href="#niches" className="text-gray-700 hover:text-gray-900">Popular Categories</a>
         </nav>
 
-        {/* Burger (mobile) */}
+        <div className="hidden md:flex items-center gap-2">
+          <Link href="/login" className="btn-cta-ghost">Sign In</Link>
+          <Link href="/signup" className="btn-cta-primary">Get Started</Link>
+        </div>
+
+        {/* Mobile burger */}
         <button
           type="button"
-          aria-label={open ? 'Close menu' : 'Open menu'}
-          aria-expanded={open}
+          aria-label="Menu"
           onClick={() => setOpen(v => !v)}
-          className="sm:hidden inline-flex h-10 w-10 items-center justify-center rounded-lg hover:bg-zinc-100"
+          className="md:hidden rounded-lg p-2 hover:bg-gray-100"
         >
-          <span
-            className={`relative block h-[2px] w-6 bg-indigo-900 transition-all
-                        before:content-[''] before:absolute before:-top-2 before:h-[2px] before:w-6 before:bg-indigo-900
-                        after:content-['']  after:absolute  after:top-2  after:h-[2px] after:w-6  after:bg-indigo-900
-                        ${open ? 'bg-transparent before:rotate-45 before:top-0 after:-rotate-45 after:top-0' : ''}`}
-          />
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
 
-      {/* Mobile dropdown sheet — content aligned left, compact links (not full row) */}
+      {/* Mobile panel */}
       {open && (
-        <div className="sm:hidden border-t bg-white/95 backdrop-blur">
-          <div className="mx-auto w-full max-w-7xl px-6 py-4">
-            {/* Link list */}
-            <ul className="space-y-3">
-              <li>
-                <a
-                  href="#how"
-                  className="inline-flex items-center px-1 py-1 text-[15px] font-medium text-zinc-800 hover:text-indigo-700"
-                >
-                  How it works
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#niches"
-                  className="inline-flex items-center px-1 py-1 text-[15px] font-medium text-zinc-800 hover:text-indigo-700"
-                >
-                  Niches
-                </a>
-              </li>
-            </ul>
-
-            <div className="my-4 h-px bg-zinc-200" />
-
-            {/* CTAs — left aligned, not full-width */}
-            <div className="flex items-center gap-3">
-              <Link
-                href="/login"
-                className="inline-flex items-center px-3 py-2 text-sm font-semibold rounded-lg border hover:bg-zinc-50"
-              >
-                Log in
-              </Link>
-              <Link
-                href="/signup"
-                className="inline-flex items-center px-3 py-2 text-sm font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm"
-              >
-                Sign up
-              </Link>
+        <div ref={panelRef} className="md:hidden border-t bg-white">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3">
+            <div className="flex flex-col gap-2">
+              <a href="#how" className="mobile-item">How It Works</a>
+              <a href="#niches" className="mobile-item">Popular Categories</a>
+              <div className="h-px bg-gray-200 my-2" />
+              <div className="flex gap-2">
+                <Link href="/login" className="btn-cta-ghost flex-1">Sign In</Link>
+                <Link href="/signup" className="btn-cta-primary flex-1">Get Started</Link>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Tiny styles used by this header */}
+      <style>{`
+        .btn-cta-primary {
+          padding:.55rem .9rem;border-radius:10px;font-weight:600;color:#fff;background:#4f46e5;
+          box-shadow:0 6px 16px rgba(79,70,229,.18)
+        }
+        .btn-cta-primary:hover { filter:saturate(1.08) }
+        .btn-cta-ghost {
+          padding:.55rem .9rem;border-radius:10px;font-weight:600;border:1px solid #e5e7eb;background:#fff
+        }
+        .btn-cta-ghost:hover { background:#f3f4f6 }
+        .mobile-item { padding:.6rem .25rem;border-radius:.5rem;color:#111827 }
+        .mobile-item:hover { background:#f9fafb }
+      `}</style>
     </header>
   )
 }
