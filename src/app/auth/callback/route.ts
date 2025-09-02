@@ -13,26 +13,21 @@ function env(nameA: string, nameB?: string) {
 
 export async function GET(req: Request) {
   const url = new URL(req.url)
-  const next = url.searchParams.get('next') || '/discover'
-  const type = (url.searchParams.get('type') || '').toLowerCase()
 
-  // Decide target first
-  const target =
-    type === 'recovery' ? '/reset' :
-    type === 'signup'   ? `/login?verified=1&next=${encodeURIComponent(next)}` :
-    next
+  // Force final destination
+  const FINAL = new URL('/discover', url.origin)
 
-  // IMPORTANT: attach cookies to THIS response
-  const res = NextResponse.redirect(new URL(target, url.origin))
+  // Create the redirect response up front; we'll attach cookies to *this* response.
+  const res = NextResponse.redirect(FINAL)
   res.headers.set('Cache-Control', 'no-store')
 
+  // Read from incoming cookies, WRITE to the response we’re returning.
   const store = cookies()
   const SUPABASE_URL = env('NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL')
   const SUPABASE_ANON_KEY = env('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY')
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    // still redirect, but without session if envs missing
-    return res
-  }
+
+  // If envs are missing, still redirect (but there won’t be a session).
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
@@ -44,14 +39,10 @@ export async function GET(req: Request) {
   })
 
   try {
-    // sets sb-access-token / sb-refresh-token on `res`
+    // Exchange ?code=... and set sb-access-token/sb-refresh-token on the redirect response.
     await supabase.auth.exchangeCodeForSession(req.url)
   } catch {
-    // ignore; still redirect
-  }
-
-  if (type === 'signup') {
-    try { await supabase.auth.signOut() } catch {}
+    // ignore errors; we still send user to /discover
   }
 
   return res
