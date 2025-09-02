@@ -14,7 +14,7 @@ function env(a: string, b?: string) {
 export async function GET(req: Request) {
   const url = new URL(req.url)
 
-  // Force final destination (or swap to your preferred target)
+  // Force final destination
   const res = NextResponse.redirect(new URL('/discover', url.origin))
   res.headers.set('Cache-Control', 'no-store')
 
@@ -28,7 +28,6 @@ export async function GET(req: Request) {
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
       get: (name) => store.get(name)?.value,
-      // Write cookies on the SAME response we’re returning so they survive the redirect
       set: (name, value, options) => res.cookies.set({ name, value, ...options }),
       remove: (name, options) =>
         res.cookies.set({ name, value: '', ...options, expires: new Date(0) }),
@@ -36,11 +35,8 @@ export async function GET(req: Request) {
   })
 
   try {
-    // Exchanges ?code=... and sets auth cookies on `res`
-    await supabase.auth.exchangeCodeForSession(req.url)
-  } catch {
-    // ignore; still redirect
-  }
+    await supabase.auth.exchangeCodeForSession(req.url) // writes Set-Cookie onto `res`
+  } catch {}
 
   return res
 }
