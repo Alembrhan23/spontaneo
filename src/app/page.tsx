@@ -65,12 +65,13 @@ export default function Home() {
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-white via-indigo-50/20 to-amber-50/20"
       />
+      {/* UPDATED: add pointer-events-none and -z-10 so these don’t block taps */}
       <div
-        className="absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50"
+        className="pointer-events-none absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50 -z-10"
         aria-hidden
       ></div>
       <div
-        className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-96 h-96 bg-amber-100 rounded-full blur-3xl opacity-40"
+        className="pointer-events-none absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-96 h-96 bg-amber-100 rounded-full blur-3xl opacity-40 -z-10"
         aria-hidden
       ></div>
 
@@ -578,7 +579,7 @@ export default function Home() {
       </section>
 
       {/* ========================= Footer ======================== */}
-      <footer className="border-t border-gray-200 bg-white">
+      <footer className="relative z-10 border-t border-gray-200 bg-white">
         <div className="max-w-6xl mx-auto px-5 py-10 sm:py-12">
           <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
             <div className="text-center md:text-left">
@@ -589,13 +590,13 @@ export default function Home() {
             </div>
 
             <div className="flex flex-wrap justify-center gap-4 text-xs sm:text-sm sm:gap-6">
-              <a href="mailto:hello@nowio.app" className="text-gray-500 hover:text-gray-700">
+              <Link href="/contact" className="text-gray-500 hover:text-gray-700">
                 Contact
-              </a>
-              <Link href="/terms" className="text-gray-500 hover:text-gray-700">
+              </Link>
+              <Link href="/legal/terms" className="text-gray-500 hover:text-gray-700">
                 Terms
               </Link>
-              <Link href="/privacy" className="text-gray-500 hover:text-gray-700">
+              <Link href="/legal/privacy" className="text-gray-500 hover:text-gray-700">
                 Privacy
               </Link>
             </div>
