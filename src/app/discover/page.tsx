@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import ActivityCard from '@/components/ActivityCard'
 import { PlusCircle, Shuffle, Utensils, Dumbbell, Music2, Coffee } from 'lucide-react'
 
+/* -------------------- types -------------------- */
 type ActivityRow = {
   id: string
   title: string
@@ -21,9 +22,15 @@ type ActivityRow = {
   created_at: string | null
   creator_id: string
 }
-type ProfileRow = { id: string; full_name: string | null; avatar_url: string | null; is_verified: boolean | null }
+type ProfileRow = {
+  id: string
+  full_name: string | null
+  avatar_url: string | null
+  is_verified: boolean | null
+}
 type ParticipantRow = { activity_id: string; user_id: string }
 
+/* -------------------- constants -------------------- */
 const quickActions = [
   { icon: PlusCircle, label: 'Create Plan',  desc: 'Start something new',   action: 'create' },
   { icon: Shuffle,   label: 'Surprise Me',  desc: 'Find something random', action: 'surprise' },
@@ -31,7 +38,7 @@ const quickActions = [
   { icon: Dumbbell,  label: 'Active',       desc: 'Sports & outdoors',     action: 'filter:Sports' },
   { icon: Music2,    label: 'Nightlife',    desc: 'Live music & DJs',      action: 'filter:Music & Nightlife' },
   { icon: Coffee,    label: 'Co-work',      desc: 'Coffee & sprints',      action: 'filter:Coffee & Co-work' },
-]
+] as const
 
 const neighborhoods = ['All Neighborhoods', 'RiNo', 'LoHi', 'Five Points'] as const
 
@@ -47,59 +54,83 @@ const filters = [
   'Coffee & Co-work',
 ] as const
 
+/* -------------------- component -------------------- */
 export default function DiscoverPage() {
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)
-  const [rows, setRows] = useState<any[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [rows, setRows] = useState<(ActivityRow & {
+    creator: ProfileRow | null
+    participants_count: number
+    _isOwner: boolean
+    _isJoined: boolean
+  })[]>([])
   const [me, setMe] = useState<string | null>(null)
 
   const [n, setN] = useState<(typeof neighborhoods)[number]>('All Neighborhoods')
   const [f, setF] = useState<(typeof filters)[number]>('All Activities')
 
-  async function load() {
+  // guard to ignore state updates after unmount or stale loads
+  const aliveRef = useRef(true)
+  useEffect(() => {
+    aliveRef.current = true
+    return () => { aliveRef.current = false }
+  }, [])
+
+  const load = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const currentUserId = user?.id ?? null
-      setMe(currentUserId)
+      // 1) current user
+      const [{ data: uData }, { data: acts, error: eActs }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase
+          .from('activities')
+          .select('id, title, description, category, neighborhood, location, start_at, max_spots, created_at, creator_id, location_name, location_lat, location_lng')
+          .gte('start_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+          .order('start_at', { ascending: true })
+      ])
 
-      const { data: activities, error: e1 } = await supabase
-        .from('activities')
-        .select('id, title, description, category, neighborhood, location, start_at, max_spots, created_at, creator_id, location_name, location_lat, location_lng')
-        .gte('start_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
-        .order('start_at', { ascending: true })
-      if (e1) throw e1
-      if (!activities?.length) { setRows([]); return }
+      const currentUserId = uData?.user?.id ?? null
+      if (aliveRef.current) setMe(currentUserId)
 
-      const ids = activities.map(a => a.id)
+      if (eActs) throw eActs
+      const activities = (acts ?? []) as ActivityRow[]
+      if (!activities.length) {
+        if (aliveRef.current) setRows([])
+        return
+      }
+
+      const activityIds = activities.map(a => a.id)
       const creatorIds = Array.from(new Set(activities.map(a => a.creator_id)))
 
-      let parts: ParticipantRow[] = []
-      if (ids.length) {
-        const { data, error } = await supabase.from('activity_participants').select('activity_id, user_id').in('activity_id', ids)
-        if (error) throw error
-        parts = data ?? []
-      }
+      // 2) parallel fetch participants + my joined + creator profiles
+      const [partsRes, mineRes, profRes] = await Promise.all([
+        activityIds.length
+          ? supabase.from('activity_participants').select('activity_id, user_id').in('activity_id', activityIds)
+          : Promise.resolve({ data: [] as ParticipantRow[], error: null }),
+        currentUserId
+          ? supabase.from('activity_participants').select('activity_id').eq('user_id', currentUserId)
+          : Promise.resolve({ data: [] as { activity_id: string }[], error: null }),
+        creatorIds.length
+          ? supabase.from('profiles').select('id, full_name, avatar_url, is_verified').in('id', creatorIds)
+          : Promise.resolve({ data: [] as ProfileRow[], error: null }),
+      ])
 
-      let joinedSet = new Set<string>()
-      if (currentUserId) {
-        const { data } = await supabase.from('activity_participants').select('activity_id').eq('user_id', currentUserId)
-        joinedSet = new Set((data ?? []).map(d => d.activity_id))
-      }
+      if (partsRes.error) throw partsRes.error
+      if (mineRes.error) throw mineRes.error
+      if (profRes.error) throw profRes.error
 
-      let profiles: ProfileRow[] = []
-      if (creatorIds.length) {
-        const { data, error } = await supabase.from('profiles').select('id, full_name, avatar_url, is_verified').in('id', creatorIds)
-        if (error) throw error
-        profiles = data ?? []
-      }
+      const parts = (partsRes.data ?? []) as ParticipantRow[]
+      const profiles = (profRes.data ?? []) as ProfileRow[]
+      const joinedSet = new Set(((mineRes.data ?? []) as { activity_id: string }[]).map(d => d.activity_id))
 
       const byCreator: Record<string, ProfileRow> = Object.fromEntries(profiles.map(p => [p.id, p]))
       const byActCount: Record<string, number> = {}
-      parts.forEach(p => { byActCount[p.activity_id] = (byActCount[p.activity_id] ?? 0) + 1 })
+      for (const p of parts) byActCount[p.activity_id] = (byActCount[p.activity_id] ?? 0) + 1
 
-      const merged = (activities as ActivityRow[]).map(a => ({
+      const merged = activities.map(a => ({
         ...a,
         creator: byCreator[a.creator_id] ?? null,
         participants_count: byActCount[a.id] ?? 0,
@@ -107,23 +138,27 @@ export default function DiscoverPage() {
         _isJoined: joinedSet.has(a.id),
       }))
 
-      setRows(merged)
-    } catch (err) {
+      if (aliveRef.current) setRows(merged)
+    } catch (err: any) {
       console.error('load activities error:', err)
-      setRows([])
+      if (aliveRef.current) {
+        setRows([])
+        setError(err?.message ?? 'Failed to load activities.')
+      }
     } finally {
-      setLoading(false)
+      if (aliveRef.current) setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  // initial load + allow manual refresh via child callback
+  useEffect(() => { load() }, [load])
 
-  // Hide joined activities for logged-in users
+  // computed, hide joined if logged in, apply filters
   const items = useMemo(() => {
-    return rows.filter((a) =>
+    return rows.filter(a =>
       (n === 'All Neighborhoods' || a.neighborhood === n) &&
-      (f === 'All Activities'    || a.category === f) &&
-      (!(!!me) || !a._isJoined) // if logged in, hide items you've joined
+      (f === 'All Activities' || a.category === f) &&
+      (!(!!me) || !a._isJoined)
     )
   }, [rows, n, f, me])
 
@@ -181,9 +216,11 @@ export default function DiscoverPage() {
       {/* Feed */}
       {loading ? (
         <div>Loading…</div>
+      ) : error ? (
+        <div className="text-rose-600">{error}</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((a: any) => (
+          {items.map((a) => (
             <ActivityCard
               key={a.id}
               a={a}
