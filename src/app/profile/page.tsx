@@ -4,13 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
-type Socials = {
-  website?: string
-  instagram?: string
-  twitter?: string
-  tiktok?: string
-  linkedin?: string
-}
+type Socials = { website?: string; instagram?: string; twitter?: string; tiktok?: string; linkedin?: string }
 type Profile = {
   full_name: string
   avatar_url: string | null
@@ -81,7 +75,6 @@ export default function ProfilePage() {
       if (!user) { router.push('/login'); return }
       setUserId(user.id)
 
-      // ensure a row exists
       await supabase.from('profiles').upsert({ id: user.id }, { onConflict: 'id' })
 
       const { data, error } = await supabase
@@ -101,7 +94,6 @@ export default function ProfilePage() {
         socials: (data?.socials ?? {}) as Socials
       })
 
-      // VibePoints balance (optional; safe if table exists)
       const { data: bal } = await supabase
         .from('vibe_points_balance')
         .select('balance')
@@ -118,7 +110,6 @@ export default function ProfilePage() {
     if (!userId) return
     setSaving(true)
 
-    // Clean socials: keep only known keys and valid URLs
     const cleaned: Socials = {}
     for (const key of SOCIAL_KEYS) {
       const raw = (p.socials?.[key] || '').trim()
@@ -160,123 +151,144 @@ export default function ProfilePage() {
     router.push('/login')
   }
 
-  if (loading) return <div>Loading…</div>
+  if (loading) return <div className="p-4">Loading…</div>
 
   const avatarSrc =
     p.avatar_url ||
     `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(p.full_name || 'User')}`
 
   return (
-    <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <img src={avatarSrc} className="w-20 h-20 rounded-full object-cover" alt="avatar" />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold truncate">{p.full_name || 'Your profile'}</h1>
-            {p.is_verified && <VerifiedBadge small />}
+    <div className="mx-auto max-w-2xl p-4 sm:p-6">
+      <div className="bg-white rounded-2xl shadow p-4 sm:p-6 space-y-6">
+        {/* Header — mobile-first: stack; on sm+ make it a row */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <img
+              src={avatarSrc}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shrink-0"
+              alt="avatar"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-lg sm:text-xl font-semibold truncate">
+                  {p.full_name || 'Your profile'}
+                </h1>
+                {p.is_verified && <VerifiedBadge small />}
+              </div>
+              <div className="mt-2">
+                <VibeChip balance={vp} />
+              </div>
+            </div>
           </div>
-          <div className="mt-2">
-            <VibeChip balance={vp} />
-          </div>
-        </div>
-        {!p.is_verified && (
-          <a
-            href="/verify/start"
-            className="ml-auto rounded-lg bg-emerald-600 text-white px-3 py-2 text-sm hover:bg-emerald-700"
-          >
-            Verify
-          </a>
-        )}
-        <button onClick={logout} className="ml-2 text-sm text-red-600 hover:underline">Log out</button>
-      </div>
 
-      {/* Form */}
-      <form onSubmit={save} className="space-y-4">
-        <div>
-          <label className="text-sm text-gray-600">Full name</label>
-          <input
-            className="mt-1 w-full border rounded p-2"
-            value={p.full_name}
-            onChange={e => setP({ ...p, full_name: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="text-sm text-gray-600">Neighborhood</label>
-          <select
-            className="mt-1 w-full border rounded p-2"
-            value={p.neighborhood ?? 'RiNo'}
-            onChange={e => setP({ ...p, neighborhood: e.target.value })}
-          >
-            {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="text-sm text-gray-600">Bio</label>
-          <textarea
-            className="mt-1 w-full border rounded p-2"
-            rows={3}
-            value={p.bio ?? ''}
-            onChange={e => setP({ ...p, bio: e.target.value })}
-          />
-        </div>
-
-        {/* Socials */}
-        <div className="grid md:grid-cols-2 gap-4">
-          {SOCIAL_KEYS.map(k => (
-            <label key={k} className="block">
-              <span className="text-sm capitalize">{k}</span>
-              <input
-                className="mt-1 w-full border rounded p-2"
-                placeholder={
-                  k === 'website' ? 'https://your-site.com'
-                    : k === 'instagram' ? 'https://instagram.com/yourhandle'
-                    : k === 'twitter' ? 'https://twitter.com/yourhandle'
-                    : k === 'tiktok' ? 'https://www.tiktok.com/@yourhandle'
-                    : 'https://www.linkedin.com/in/yourhandle'
-                }
-                value={(p.socials?.[k] as string) || ''}
-                onChange={e => setP({ ...p, socials: { ...p.socials, [k]: e.target.value } })}
-              />
-            </label>
-          ))}
-        </div>
-
-        <button
-          disabled={saving}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save changes'}
-        </button>
-      </form>
-
-      {/* Preview links */}
-      <div>
-        <h2 className="font-semibold mb-2">Your links</h2>
-        <div className="flex flex-wrap gap-2">
-          {SOCIAL_KEYS.filter(k => p.socials?.[k]).map(k => {
-            const href = p.socials?.[k] as string
-            return (
+          {/* Actions — full-width on mobile, inline on desktop */}
+          <div className="flex gap-2 w-full sm:w-auto">
+            {!p.is_verified && (
               <a
-                key={k}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-sm hover:bg-zinc-50"
-                title={href}
+                href="/verify/start"
+                className="flex-1 sm:flex-none rounded-lg bg-emerald-600 text-white px-3 py-2 text-sm hover:bg-emerald-700 text-center"
               >
-                <span>
-                  {k === 'website' ? '🌐' : k === 'instagram' ? '📸' : k === 'twitter' ? '🐦' : k === 'tiktok' ? '🎵' : '💼'}
-                </span>
-                <span className="truncate max-w-[160px]">{new URL(href).hostname}</span>
+                Verify
               </a>
-            )
-          })}
-          {SOCIAL_KEYS.every(k => !p.socials?.[k]) && (
-            <div className="text-sm text-gray-500">No social links yet.</div>
-          )}
+            )}
+            <button
+              onClick={logout}
+              className="flex-1 sm:flex-none rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50"
+            >
+              Log out
+            </button>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={save} className="space-y-4">
+          <div>
+            <label className="text-sm text-gray-600">Full name</label>
+            <input
+              className="mt-1 w-full border rounded-lg p-2"
+              value={p.full_name}
+              onChange={e => setP({ ...p, full_name: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600">Neighborhood</label>
+            <select
+              className="mt-1 w-full border rounded-lg p-2"
+              value={p.neighborhood ?? 'RiNo'}
+              onChange={e => setP({ ...p, neighborhood: e.target.value })}
+            >
+              {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600">Bio</label>
+            <textarea
+              className="mt-1 w-full border rounded-lg p-2"
+              rows={3}
+              value={p.bio ?? ''}
+              onChange={e => setP({ ...p, bio: e.target.value })}
+            />
+          </div>
+
+          {/* Socials */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {SOCIAL_KEYS.map(k => (
+              <label key={k} className="block">
+                <span className="text-sm capitalize">{k}</span>
+                <input
+                  className="mt-1 w-full border rounded-lg p-2"
+                  placeholder={
+                    k === 'website' ? 'https://your-site.com'
+                      : k === 'instagram' ? 'https://instagram.com/yourhandle'
+                      : k === 'twitter' ? 'https://twitter.com/yourhandle'
+                      : k === 'tiktok' ? 'https://www.tiktok.com/@yourhandle'
+                      : 'https://www.linkedin.com/in/yourhandle'
+                  }
+                  value={(p.socials?.[k] as string) || ''}
+                  onChange={e => setP({ ...p, socials: { ...p.socials, [k]: e.target.value } })}
+                />
+              </label>
+            ))}
+          </div>
+
+          <button
+            disabled={saving}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </form>
+
+        {/* Preview links */}
+        <div>
+          <h2 className="font-semibold mb-2">Your links</h2>
+          <div className="flex flex-wrap gap-2">
+            {SOCIAL_KEYS.filter(k => p.socials?.[k]).map(k => {
+              const href = p.socials?.[k] as string
+              let host = href
+              try { host = new URL(href).hostname } catch {}
+              return (
+                <a
+                  key={k}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-sm hover:bg-zinc-50 max-w-[70vw] sm:max-w-none"
+                  title={href}
+                >
+                  <span>
+                    {k === 'website' ? '🌐' : k === 'instagram' ? '📸' : k === 'twitter' ? '🐦' : k === 'tiktok' ? '🎵' : '💼'}
+                  </span>
+                  <span className="truncate">{host}</span>
+                </a>
+              )
+            })}
+            {SOCIAL_KEYS.every(k => !p.socials?.[k]) && (
+              <div className="text-sm text-gray-500">No social links yet.</div>
+            )}
+          </div>
         </div>
       </div>
     </div>
