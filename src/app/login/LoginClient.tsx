@@ -20,12 +20,10 @@ function sanitizeNext(n?: string | null) {
   const fallback = '/discover'
   if (!n) return fallback
   try {
-    // Absolute URL: must be same origin
     if (/^https?:\/\//i.test(n)) {
       const u = new URL(n, baseUrl())
       return u.origin === baseUrl() ? (u.pathname + u.search + u.hash || fallback) : fallback
     }
-    // Relative URL: ensure it starts with /
     return n.startsWith('/') ? n : `/${n}`
   } catch {
     return fallback
@@ -94,7 +92,6 @@ export default function LoginClient({ next }: Props) {
       } catch { /* ignore */ }
     }
 
-    // Hard navigation so SSR reads cookies immediately
     window.location.replace(safeNext)
   }
 
@@ -239,7 +236,7 @@ export default function LoginClient({ next }: Props) {
               } catch (e: any) {
                 setErr(e?.message || 'Failed to start Google sign-in.')
               } finally {
-                // If OAuth succeeds, the browser will navigate away; we only clear busy if there was an error.
+                // If OAuth succeeds, browser navigates away; we only clear busy if there was an error.
                 setBusy(false)
               }
             }}
