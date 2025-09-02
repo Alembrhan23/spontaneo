@@ -14,19 +14,17 @@ const PROTECTED_PREFIXES = [
   '/activity',
   '/verify',
   '/profile',
-  '/admin', // we also role-check below
+  '/admin',
 ]
 
 export async function middleware(req: NextRequest) {
-  // ⚠️ Never handle the OAuth return here — let the route set cookies & redirect
+  // Never handle OAuth return here — let the route set cookies & redirect
   if (req.nextUrl.pathname.startsWith('/auth/callback')) {
     return NextResponse.next()
   }
 
-  // Always create a response we can mutate; Supabase will update cookies on it
   const res = NextResponse.next()
 
-  // Supabase SSR client with req/res cookie adapter
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -42,7 +40,7 @@ export async function middleware(req: NextRequest) {
 
   const { pathname, search } = req.nextUrl
 
-  // Public routes (bypass)
+  // Public routes
   const isPublic =
     pathname === '/' ||
     pathname === '/login' ||
@@ -58,19 +56,16 @@ export async function middleware(req: NextRequest) {
 
   if (isPublic) return res
 
-  // Refresh session (and set any updated cookies on `res`)
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Require auth for protected paths
   const needsAuth = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))
   if (needsAuth && !user) {
     const url = req.nextUrl.clone()
     url.pathname = '/login'
-    url.searchParams.set('next', pathname + search) // keep any query
+    url.searchParams.set('next', pathname + search)
     return NextResponse.redirect(url)
   }
 
-  // Optional: hard-gate /admin by role
   if (pathname.startsWith('/admin') && user) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -83,7 +78,6 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // Keep logged-in users out of auth pages
   if (user && (pathname === '/login' || pathname === '/signup')) {
     const url = req.nextUrl.clone()
     url.pathname = '/discover'
@@ -94,12 +88,9 @@ export async function middleware(req: NextRequest) {
   return res
 }
 
-// Exclude static assets + explicitly exclude the OAuth callback from middleware
+// ✅ Single matcher that excludes static assets AND /auth/callback
 export const config = {
   matcher: [
-    // skip static
-    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest).*)',
-    // but explicitly DO NOT match the OAuth callback
-    '/((?!auth/callback).*)',
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest|auth/callback).*)',
   ],
 }
