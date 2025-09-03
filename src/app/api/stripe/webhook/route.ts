@@ -1,20 +1,27 @@
-// src/app/api/stripe/webhook/route.ts
-import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
-import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
+// app/api/stripe/webhook/route.ts   (or match your path: app/api/webhooks/stripe/route.ts)
+import { NextResponse } from "next/server"
+import Stripe from "stripe"
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
 
-export const runtime = 'nodejs'
-export const dynamic = 'force-dynamic'
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
-const supabase = createSupabaseAdmin(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,   // server-only key
-  { auth: { persistSession: false } }
-)
+// Lazy helpers (no env access at module load)
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error("Missing STRIPE_SECRET_KEY")
+  return new Stripe(key, { apiVersion: "2024-06-20" })
+}
 
-// Small helper
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY // server-only
+  if (!url || !key) throw new Error("Missing Supabase admin envs")
+  return createSupabaseAdmin(url, key, { auth: { persistSession: false } })
+}
+
 async function upsertSub(
+  supabase: ReturnType<typeof getSupabase>,
   user_id: string,
   data: {
     stripe_customer_id?: string | null
@@ -27,16 +34,20 @@ async function upsertSub(
   }
 ) {
   await supabase
-    .from('user_subscriptions')
-    .upsert({ user_id, ...data }, { onConflict: 'user_id' })
+    .from("user_subscriptions")
+    .upsert({ user_id, ...data }, { onConflict: "user_id" })
 }
 
 export async function POST(req: Request) {
-  const sig = req.headers.get('stripe-signature') || ''
+  const stripe = getStripe()
+  const supabase = getSupabase()
+
+  const sig = req.headers.get("stripe-signature") || ""
   const secret = process.env.STRIPE_WEBHOOK_SECRET
-  if (!secret) return NextResponse.json({ error: 'Missing STRIPE_WEBHOOK_SECRET' }, { status: 500 })
+  if (!secret) return NextResponse.json({ error: "Missing STRIPE_WEBHOOK_SECRET" }, { status: 500 })
 
   const body = await req.text()
+
   let event: Stripe.Event
   try {
     event = stripe.webhooks.constructEvent(body, sig, secret)
@@ -46,15 +57,13 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
-      // ✅ When checkout finishes, capture the mapping (user ↔ customer/subscription)
-      case 'checkout.session.completed': {
+      case "checkout.session.completed": {
         const s = event.data.object as Stripe.Checkout.Session
-        if (s.mode !== 'subscription') break
+        if (s.mode !== "subscription") break
         const userId = (s.metadata?.userId || s.client_reference_id) as string | undefined
-        const customerId = (typeof s.customer === 'string' ? s.customer : s.customer?.id) || null
-        const subId = (typeof s.subscription === 'string' ? s.subscription : s.subscription?.id) || null
+        const customerId = (typeof s.customer === "string" ? s.customer : s.customer?.id) || null
+        const subId = (typeof s.subscription === "string" ? s.subscription : s.subscription?.id) || null
 
-        // Fetch subscription for details
         let priceId: string | null = null
         let interval: string | null = null
         let status: string | null = null
@@ -62,7 +71,8 @@ export async function POST(req: Request) {
         let plan: string | null = (s.metadata?.plan as string) || null
 
         if (subId) {
-          const sub = await stripe.subscriptions.retrieve(subId)
+          const sub: Stripe.Response<Stripe.Subscription> =
+            await stripe.subscriptions.retrieve(subId)
           const item = sub.items.data[0]
           priceId = item?.price?.id || null
           interval = (item?.price?.recurring?.interval as string) || null
@@ -72,15 +82,15 @@ export async function POST(req: Request) {
             : null
 
           if (!plan) {
-            const lookup = item?.price?.lookup_key || ''
-            if (lookup?.includes('bpro')) plan = 'business_pro'
-            else if (lookup?.includes('plus')) plan = 'plus'
+            const lookup = item?.price?.lookup_key || ""
+            if (lookup.includes("bpro")) plan = "business_pro"
+            else if (lookup.includes("plus")) plan = "plus"
           }
-          if (!plan && sub.metadata?.plan) plan = sub.metadata.plan
+          if (!plan && sub.metadata?.plan) plan = sub.metadata.plan as string
         }
 
         if (userId && customerId) {
-          await upsertSub(userId, {
+          await upsertSub(supabase, userId, {
             stripe_customer_id: customerId,
             stripe_subscription_id: subId,
             price_id: priceId,
@@ -93,12 +103,12 @@ export async function POST(req: Request) {
         break
       }
 
-      // ✅ Keep row up to date when Stripe changes the subscription (upgrades, cancels, portal changes)
-      case 'customer.subscription.created':
-      case 'customer.subscription.updated':
-      case 'customer.subscription.deleted': {
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription
-        const customerId = (typeof sub.customer === 'string' ? sub.customer : sub.customer?.id) || null
+        const customerId =
+          (typeof sub.customer === "string" ? sub.customer : sub.customer?.id) || null
         const item = sub.items.data[0]
         const priceId = item?.price?.id || null
         const interval = (item?.price?.recurring?.interval as string) || null
@@ -109,24 +119,24 @@ export async function POST(req: Request) {
 
         let plan: string | null = (sub.metadata?.plan as string) || null
         if (!plan) {
-          const lookup = item?.price?.lookup_key || ''
-          if (lookup?.includes('bpro')) plan = 'business_pro'
-          else if (lookup?.includes('plus')) plan = 'plus'
+          const lookup = item?.price?.lookup_key || ""
+          if (lookup.includes("bpro")) plan = "business_pro"
+          else if (lookup.includes("plus")) plan = "plus"
         }
 
-        // Find the user: prefer metadata.userId; else find existing row by customer id
+        // Find user row via metadata or existing mapping
         let userId = (sub.metadata?.userId as string) || null
         if (!userId && customerId) {
           const { data: existing } = await supabase
-            .from('user_subscriptions')
-            .select('user_id')
-            .eq('stripe_customer_id', customerId)
+            .from("user_subscriptions")
+            .select("user_id")
+            .eq("stripe_customer_id", customerId)
             .maybeSingle()
           userId = existing?.user_id ?? null
         }
 
         if (userId) {
-          await upsertSub(userId, {
+          await upsertSub(supabase, userId, {
             stripe_customer_id: customerId,
             stripe_subscription_id: sub.id,
             price_id: priceId,
@@ -139,23 +149,21 @@ export async function POST(req: Request) {
         break
       }
 
-      // (Optional) keep your identity verification here too, using service role:
-      case 'identity.verification_session.verified': {
+      case "identity.verification_session.verified": {
         const session = event.data.object as Stripe.Identity.VerificationSession
         const userId = session.metadata?.userId
         if (userId) {
-          await supabase.from('profiles').update({ is_verified: true }).eq('id', userId)
+          await supabase.from("profiles").update({ is_verified: true }).eq("id", userId)
         }
         break
       }
 
       default:
-        // ignore other events
         break
     }
 
     return NextResponse.json({ received: true })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Webhook handler error' }, { status: 500 })
+    return NextResponse.json({ error: err.message || "Webhook handler error" }, { status: 500 })
   }
 }
