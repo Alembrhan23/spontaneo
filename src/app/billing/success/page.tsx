@@ -8,21 +8,23 @@ export const metadata = { title: "Billing success • Nowio" }
 type SearchParams = { session_id?: string }
 
 export default async function BillingSuccessPage({
-  // Next.js 15: searchParams is async
+  // Next.js 15: await searchParams
   searchParams,
 }: {
   searchParams: Promise<SearchParams>
 }) {
   const { session_id } = await searchParams
 
-  // Best-effort backfill of user_subscriptions (safe to ignore failures)
+  // Best-effort backfill (non-blocking)
   if (session_id) {
     try {
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
         apiVersion: "2024-06-20",
       })
+
+      // Expand so we get a real Stripe.Subscription object (no Response<> confusion)
       const session = await stripe.checkout.sessions.retrieve(session_id, {
-        expand: ["subscription", "customer"],
+        expand: ["subscription", "subscription.items.data.price", "customer"],
       })
 
       const userId =
@@ -35,39 +37,29 @@ export default async function BillingSuccessPage({
           ? session.customer
           : session.customer?.id) || null
 
-      const subscriptionId =
-        (typeof session.subscription === "string"
-          ? session.subscription
-          : session.subscription?.id) || null
+      const sub: Stripe.Subscription | null =
+        typeof session.subscription === "string"
+          ? null
+          : (session.subscription as Stripe.Subscription)
 
-      let priceId: string | null = null
-      let interval: string | null = null
-      let status: string | null = null
-      let currentPeriodEnd: string | null = null
-      let plan: string | null =
-        (session.metadata?.plan as string | undefined) || null
-
-      if (subscriptionId) {
-        // ✅ Explicit Stripe type so TS knows about current_period_end
-        const subResp: Stripe.Response<Stripe.Subscription> =
-          await stripe.subscriptions.retrieve(subscriptionId)
-
-        const item = subResp.items.data[0]
-        priceId = item?.price?.id || null
-        interval = (item?.price?.recurring?.interval as string) || null
-        status = subResp.status || null
-        currentPeriodEnd = subResp.current_period_end
-          ? new Date(subResp.current_period_end * 1000).toISOString()
+      const item = sub?.items.data[0]
+      const priceId = item?.price?.id ?? null
+      const interval = item?.price?.recurring?.interval ?? null
+      const status = sub?.status ?? null
+      const currentPeriodEnd =
+        sub?.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString()
           : null
 
-        if (!plan) {
-          const lookup = item?.price?.lookup_key || ""
-          if (lookup.includes("bpro")) plan = "business_pro"
-          else if (lookup.includes("plus")) plan = "plus"
-        }
-        if (!plan && subResp.metadata?.plan) {
-          plan = subResp.metadata.plan as string
-        }
+      let plan: string | null =
+        (session.metadata?.plan as string | undefined) ??
+        (sub?.metadata?.plan as string | undefined) ??
+        null
+
+      if (!plan) {
+        const lookup = item?.price?.lookup_key ?? ""
+        if (lookup.includes("bpro")) plan = "business_pro"
+        else if (lookup.includes("plus")) plan = "plus"
       }
 
       if (userId && customerId) {
@@ -77,22 +69,24 @@ export default async function BillingSuccessPage({
           { auth: { persistSession: false } }
         )
 
-        await admin.from("user_subscriptions").upsert(
-          {
-            user_id: userId,
-            stripe_customer_id: customerId,
-            stripe_subscription_id: subscriptionId,
-            price_id: priceId,
-            plan,
-            interval,
-            status,
-            current_period_end: currentPeriodEnd,
-          },
-          { onConflict: "user_id" }
-        )
+        await admin
+          .from("user_subscriptions")
+          .upsert(
+            {
+              user_id: userId,
+              stripe_customer_id: customerId,
+              stripe_subscription_id: sub?.id ?? null,
+              price_id: priceId,
+              plan,
+              interval,
+              status,
+              current_period_end: currentPeriodEnd,
+            },
+            { onConflict: "user_id" }
+          )
       }
     } catch {
-      // Non-blocking: still show success UI
+      // ignore; show UI anyway
     }
   }
 
@@ -106,9 +100,7 @@ export default async function BillingSuccessPage({
         </div>
 
         <h1 className="text-2xl font-bold text-gray-900">You’re all set!</h1>
-        <p className="mt-2 text-gray-600">
-          Thanks for upgrading. Your subscription is active.
-        </p>
+        <p className="mt-2 text-gray-600">Thanks for upgrading. Your subscription is active.</p>
         {session_id && (
           <p className="mt-1 text-xs text-gray-500 break-all">Ref: {session_id}</p>
         )}
