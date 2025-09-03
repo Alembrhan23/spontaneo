@@ -1,10 +1,18 @@
+// src/app/profile/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
-type Socials = { website?: string; instagram?: string; twitter?: string; tiktok?: string; linkedin?: string }
+type Socials = {
+  website?: string
+  instagram?: string
+  twitter?: string
+  tiktok?: string
+  linkedin?: string
+}
+
 type Profile = {
   full_name: string
   avatar_url: string | null
@@ -16,16 +24,17 @@ type Profile = {
 
 type Subscription = {
   stripe_customer_id: string | null
-  status: string | null
-  plan: 'plus' | 'business_pro' | null
-  interval: 'monthly' | 'annual' | null
-  current_period_end: string | null
+  stripe_subscription_id: string | null
+  price_id: string | null
+  plan: string | null // 'plus' | 'business_pro' | null (keep loose to match DB)
 }
 
 const NEIGHBORHOODS = ['RiNo', 'LoHi', 'Five Points'] as const
-const SOCIAL_KEYS: (keyof Socials)[] = ['website','instagram','twitter','tiktok','linkedin']
+const SOCIAL_KEYS: (keyof Socials)[] = ['website', 'instagram', 'twitter', 'tiktok', 'linkedin']
 
-function VerifiedBadge({ small=false }:{ small?: boolean }) {
+/* ---------------- UI bits ---------------- */
+
+function VerifiedBadge({ small = false }: { small?: boolean }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full ${
@@ -34,14 +43,14 @@ function VerifiedBadge({ small=false }:{ small?: boolean }) {
       title="ID-verified"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" className="fill-current">
-        <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z"/>
+        <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z" />
       </svg>
       <span>Verified</span>
     </span>
   )
 }
 
-function VibeChip({ balance }:{ balance: number }) {
+function VibeChip({ balance }: { balance: number }) {
   const tier = balance >= 300 ? 'Rock' : balance >= 150 ? 'Solid' : balance >= 60 ? 'Steady' : 'New'
   return (
     <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-zinc-900 text-white">
@@ -58,12 +67,17 @@ function normalizeUrl(v?: string | null) {
   if (!/^https?:\/\//i.test(s)) s = 'https://' + s
   try {
     const u = new URL(s)
-    return u.origin + u.pathname.replace(/\/+$/,'')
-  } catch { return null }
+    return u.origin + u.pathname.replace(/\/+$/, '')
+  } catch {
+    return null
+  }
 }
+
+/* ---------------- Page ---------------- */
 
 export default function ProfilePage() {
   const router = useRouter()
+
   const [userId, setUserId] = useState<string | null>(null)
   const [p, setP] = useState<Profile>({
     full_name: '',
@@ -71,8 +85,9 @@ export default function ProfilePage() {
     neighborhood: 'RiNo',
     bio: '',
     is_verified: false,
-    socials: {}
+    socials: {},
   })
+
   const [vp, setVp] = useState<number>(0)
   const [sub, setSub] = useState<Subscription | null>(null)
   const [billingBusy, setBillingBusy] = useState(false)
@@ -80,32 +95,35 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+    ;(async () => {
+      const { data: auth } = await supabase.auth.getUser()
+      const user = auth.user
+      if (!user) {
+        router.push('/login')
+        return
+      }
       setUserId(user.id)
 
-      // ensure a row exists
+      // ensure profile row exists
       await supabase.from('profiles').upsert({ id: user.id }, { onConflict: 'id' })
 
-      const { data, error } = await supabase
+      // load profile
+      const { data: prof } = await supabase
         .from('profiles')
         .select('full_name, avatar_url, neighborhood, bio, is_verified, socials')
         .eq('id', user.id)
         .maybeSingle()
 
-      if (error) console.error(error)
-
       setP({
-        full_name: data?.full_name ?? '',
-        avatar_url: data?.avatar_url ?? null,
-        neighborhood: (data?.neighborhood as Profile['neighborhood']) ?? 'RiNo',
-        bio: data?.bio ?? '',
-        is_verified: !!data?.is_verified,
-        socials: (data?.socials ?? {}) as Socials
+        full_name: prof?.full_name ?? '',
+        avatar_url: prof?.avatar_url ?? null,
+        neighborhood: (prof?.neighborhood as Profile['neighborhood']) ?? 'RiNo',
+        bio: prof?.bio ?? '',
+        is_verified: !!prof?.is_verified,
+        socials: (prof?.socials ?? {}) as Socials,
       })
 
-      // VibePoints balance (optional; safe if table exists)
+      // vibe points (optional)
       const { data: bal } = await supabase
         .from('vibe_points_balance')
         .select('balance')
@@ -113,10 +131,10 @@ export default function ProfilePage() {
         .maybeSingle()
       setVp(bal?.balance ?? 0)
 
-      // Subscription snapshot (optional; safe if table exists)
+      // subscription snapshot (your schema)
       const { data: subRow } = await supabase
         .from('user_subscriptions')
-        .select('stripe_customer_id, status, plan, interval, current_period_end')
+        .select('stripe_customer_id, stripe_subscription_id, price_id, plan')
         .eq('user_id', user.id)
         .maybeSingle()
       setSub(subRow ?? null)
@@ -130,7 +148,7 @@ export default function ProfilePage() {
     if (!userId) return
     setSaving(true)
 
-    // Clean socials: keep only known keys and valid URLs
+    // sanitize socials
     const cleaned: Socials = {}
     for (const key of SOCIAL_KEYS) {
       const raw = (p.socials?.[key] || '').trim()
@@ -145,13 +163,16 @@ export default function ProfilePage() {
         avatar_url: p.avatar_url,
         neighborhood: p.neighborhood,
         bio: p.bio,
-        socials: cleaned
+        socials: cleaned,
       })
       .eq('id', userId)
 
     setSaving(false)
-    if (error) return alert(error.message)
-    alert('Saved!')
+    if (error) {
+      alert(error.message)
+    } else {
+      alert('Saved!')
+    }
   }
 
   async function onPickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
@@ -171,10 +192,17 @@ export default function ProfilePage() {
     try {
       setBillingBusy(true)
       const res = await fetch('/api/portal', { method: 'POST' })
-      if (res.status === 401) { router.push('/login?next=/pp/profile'); return }
+      if (res.status === 401) {
+        router.push('/login?next=/profile')
+        return
+      }
       const data = await res.json()
-      if (data?.url) window.location.href = data.url
-      else alert(data?.error || 'No subscription to manage.')
+      if (data?.url) {
+        window.location.href = data.url
+      } else {
+        // no customer yet – send them to pricing
+        window.location.href = '/pricing?createCustomer=1'
+      }
     } catch (e: any) {
       alert(e?.message || 'Something went wrong.')
     } finally {
@@ -190,8 +218,10 @@ export default function ProfilePage() {
   if (loading) return <div className="p-4">Loading…</div>
 
   const avatarSrc =
-    p.avatar_url ||
-    `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(p.full_name || 'User')}`
+    p.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(p.full_name || 'User')}`
+
+  // Show "Manage plan" if we have a Stripe customer or subscription recorded
+  const showManage = !!(sub?.stripe_customer_id || sub?.stripe_subscription_id)
 
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6">
@@ -219,8 +249,8 @@ export default function ProfilePage() {
 
           {/* Actions — full-width on mobile, inline on desktop */}
           <div className="flex gap-2 w-full sm:w-auto">
-            {/* Manage plan or Upgrade */}
-            {sub?.stripe_customer_id ? (
+            {/* Upgrade or Manage plan */}
+            {showManage ? (
               <button
                 onClick={openPortal}
                 disabled={billingBusy}
@@ -272,7 +302,11 @@ export default function ProfilePage() {
               value={p.neighborhood ?? 'RiNo'}
               onChange={e => setP({ ...p, neighborhood: e.target.value })}
             >
-              {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
+              {NEIGHBORHOODS.map(n => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -294,10 +328,14 @@ export default function ProfilePage() {
                 <input
                   className="mt-1 w-full border rounded-lg p-2"
                   placeholder={
-                    k === 'website' ? 'https://your-site.com'
-                      : k === 'instagram' ? 'https://instagram.com/yourhandle'
-                      : k === 'twitter' ? 'https://twitter.com/yourhandle'
-                      : k === 'tiktok' ? 'https://www.tiktok.com/@yourhandle'
+                    k === 'website'
+                      ? 'https://your-site.com'
+                      : k === 'instagram'
+                      ? 'https://instagram.com/yourhandle'
+                      : k === 'twitter'
+                      ? 'https://twitter.com/yourhandle'
+                      : k === 'tiktok'
+                      ? 'https://www.tiktok.com/@yourhandle'
                       : 'https://www.linkedin.com/in/yourhandle'
                   }
                   value={(p.socials?.[k] as string) || ''}
@@ -307,12 +345,25 @@ export default function ProfilePage() {
             ))}
           </div>
 
-          <button
-            disabled={saving}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : 'Save changes'}
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <label className="inline-flex items-center gap-2">
+              <input type="file" accept="image/*" onChange={onPickAvatar} className="hidden" id="avatarInput" />
+              <button
+                type="button"
+                onClick={() => document.getElementById('avatarInput')?.click()}
+                className="rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50"
+              >
+                Change avatar
+              </button>
+            </label>
+
+            <button
+              disabled={saving}
+              className="ml-auto rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
         </form>
 
         {/* Preview links */}
@@ -322,7 +373,9 @@ export default function ProfilePage() {
             {SOCIAL_KEYS.filter(k => p.socials?.[k]).map(k => {
               const href = p.socials?.[k] as string
               let host = href
-              try { host = new URL(href).hostname } catch {}
+              try {
+                host = new URL(href).hostname
+              } catch {}
               return (
                 <a
                   key={k}
@@ -333,7 +386,15 @@ export default function ProfilePage() {
                   title={href}
                 >
                   <span>
-                    {k === 'website' ? '🌐' : k === 'instagram' ? '📸' : k === 'twitter' ? '🐦' : k === 'tiktok' ? '🎵' : '💼'}
+                    {k === 'website'
+                      ? '🌐'
+                      : k === 'instagram'
+                      ? '📸'
+                      : k === 'twitter'
+                      ? '🐦'
+                      : k === 'tiktok'
+                      ? '🎵'
+                      : '💼'}
                   </span>
                   <span className="truncate">{host}</span>
                 </a>
@@ -351,15 +412,14 @@ export default function ProfilePage() {
           {sub ? (
             <div className="text-sm text-gray-700 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5">
-                  {(sub.plan === 'business_pro' ? 'Business Pro' : 'Social Plus')}{sub.interval ? ` • ${sub.interval}` : ''}
-                </span>
-                <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">
-                  {sub.status ?? '—'}
-                </span>
-                {sub.current_period_end && (
-                  <span className="text-gray-500">
-                    renews {new Date(sub.current_period_end).toLocaleDateString()}
+                {sub.plan && (
+                  <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5">
+                    {sub.plan === 'business_pro' ? 'Business Pro' : 'Social Plus'}
+                  </span>
+                )}
+                {sub.price_id && (
+                  <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">
+                    price: {sub.price_id}
                   </span>
                 )}
               </div>
@@ -375,7 +435,10 @@ export default function ProfilePage() {
             </div>
           ) : (
             <div className="text-sm text-gray-600">
-              No active subscription. <a href="/pricing" className="text-indigo-600 hover:underline">See plans</a>
+              No active subscription.{' '}
+              <a href="/pricing" className="text-indigo-600 hover:underline">
+                See plans
+              </a>
             </div>
           )}
         </div>

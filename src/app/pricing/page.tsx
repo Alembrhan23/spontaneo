@@ -2,15 +2,38 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase/client'
 
 type Tab = 'consumer' | 'business'
 type Interval = 'monthly' | 'annual'
 type Plan = 'plus' | 'business_pro'
 
+type SubRow = {
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  plan: string | null
+}
+
 export default function PricingPage() {
   const [tab, setTab] = useState<Tab>('consumer')
   const [annual, setAnnual] = useState(false)
+  const [sub, setSub] = useState<SubRow | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setAuthChecked(true); return }
+      const { data } = await supabase
+        .from('user_subscriptions')
+        .select('stripe_customer_id, stripe_subscription_id, plan')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      setSub(data ?? null)
+      setAuthChecked(true)
+    })()
+  }, [])
 
   const pricePlus = annual
     ? { label: '$39.90/yr', sub: '≈ $3.33/mo billed annually' }
@@ -19,6 +42,10 @@ export default function PricingPage() {
   const priceVenue = annual
     ? { label: '$1,499/yr', sub: '≈ $125/mo billed annually' }
     : { label: '$149/mo', sub: 'billed monthly' }
+
+  const hasBilling = !!(sub?.stripe_customer_id || sub?.stripe_subscription_id)
+  const isPlus = sub?.plan === 'plus'
+  const isBpro = sub?.plan === 'business_pro'
 
   async function startCheckout(plan: Plan, interval: Interval) {
     try {
@@ -32,13 +59,22 @@ export default function PricingPage() {
         return
       }
       const data = await res.json()
-      if (data?.url) {
-        window.location.href = data.url as string
-      } else {
-        alert(data?.error || 'Could not start checkout')
-      }
+      if (data?.url) window.location.href = data.url
+      else alert(data?.error || 'Could not start checkout')
     } catch (e: any) {
       alert(e?.message || 'Network error')
+    }
+  }
+
+  async function openPortal() {
+    try {
+      const res = await fetch('/api/portal', { method: 'POST' })
+      if (res.status === 401) { window.location.href = '/login?next=/pricing'; return }
+      const data = await res.json()
+      if (data?.url) window.location.href = data.url
+      else window.location.href = '/pricing?createCustomer=1'
+    } catch (e: any) {
+      alert(e?.message || 'Something went wrong.')
     }
   }
 
@@ -101,13 +137,21 @@ export default function PricingPage() {
         {tab === 'consumer' ? (
           <ConsumerSection
             pricePlus={pricePlus}
+            hasBilling={hasBilling}
+            isPlus={isPlus}
             onPlusClick={() => startCheckout('plus', annual ? 'annual' : 'monthly')}
+            onManageClick={openPortal}
+            authChecked={authChecked}
           />
         ) : (
           <BusinessSection
             priceVenue={priceVenue}
             annual={annual}
+            hasBilling={hasBilling}
+            isBpro={isBpro}
             onBproClick={() => startCheckout('business_pro', annual ? 'annual' : 'monthly')}
+            onManageClick={openPortal}
+            authChecked={authChecked}
           />
         )}
 
@@ -140,10 +184,20 @@ export default function PricingPage() {
 function ConsumerSection({
   pricePlus,
   onPlusClick,
+  onManageClick,
+  hasBilling,
+  isPlus,
+  authChecked,
 }: {
   pricePlus: { label: string; sub: string }
   onPlusClick: () => void
+  onManageClick: () => void
+  hasBilling: boolean
+  isPlus: boolean
+  authChecked: boolean
 }) {
+  const showManage = hasBilling && (isPlus || !authChecked) // if we can’t tell yet but customer exists, show Manage
+
   return (
     <>
       {/* Plans */}
@@ -174,7 +228,11 @@ function ConsumerSection({
           price={pricePlus.label}
           sub={pricePlus.sub}
           highlight
-          cta={{ label: 'Get Plus', onClick: onPlusClick }}
+          cta={
+            showManage
+              ? { label: 'Manage plan', onClick: onManageClick }
+              : { label: 'Get Plus', onClick: onPlusClick }
+          }
           features={[
             'Join unlimited activities',
             'Get first access to popular events',
@@ -189,7 +247,7 @@ function ConsumerSection({
             'VIP access to special events',
             'Member-only discounts at local businesses',
           ]}
-          foot="Cancel anytime, no questions asked"
+          foot={showManage ? 'You’re already a member' : 'Cancel anytime, no questions asked'}
         />
       </div>
 
@@ -241,11 +299,21 @@ function BusinessSection({
   priceVenue,
   annual,
   onBproClick,
+  onManageClick,
+  hasBilling,
+  isBpro,
+  authChecked,
 }: {
   priceVenue: { label: string; sub: string }
   annual: boolean
   onBproClick: () => void
+  onManageClick: () => void
+  hasBilling: boolean
+  isBpro: boolean
+  authChecked: boolean
 }) {
+  const showManage = hasBilling && (isBpro || !authChecked)
+
   return (
     <>
       {/* Dashboard Preview */}
@@ -317,7 +385,11 @@ function BusinessSection({
           price={annual ? '$1,499/year' : '$149/month'}
           sub={annual ? 'Save ~16% with annual billing' : 'Monthly billing with no commitment'}
           highlight
-          cta={{ label: 'Get Business Pro', onClick: onBproClick }}
+          cta={
+            showManage
+              ? { label: 'Manage plan', onClick: onManageClick }
+              : { label: 'Get Business Pro', onClick: onBproClick }
+          }
           features={[
             'Unlimited featured listings',
             'Priority placement in app',
@@ -336,34 +408,8 @@ function BusinessSection({
             'Competitive analysis reports',
             'API access for data export',
           ]}
-          foot="Complete business intelligence suite"
+          foot={showManage ? 'You already have Business Pro' : 'Complete business intelligence suite'}
         />
-      </div>
-
-      {/* Enterprise Option */}
-      <div className="mt-12 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-2xl p-8 text-center">
-        <h3 className="text-2xl font-bold text-purple-900">Enterprise Solutions</h3>
-        <p className="mt-3 text-purple-700 max-w-2xl mx-auto">
-          For businesses with multiple locations, custom integration needs, or advanced analytics requirements.
-        </p>
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          {[
-            { h: 'Multi-Location Management', p: 'Manage all your venues from a single dashboard' },
-            { h: 'Custom Analytics', p: 'Tailored reports and business intelligence' },
-            { h: 'API Integration', p: 'Connect with your existing systems' },
-          ].map((x) => (
-            <div key={x.h} className="bg-white p-4 rounded-lg border border-purple-100">
-              <h4 className="font-semibold text-gray-900">{x.h}</h4>
-              <p className="text-sm text-gray-600 mt-2">{x.p}</p>
-            </div>
-          ))}
-        </div>
-        <Link
-          href="mailto:enterprise@nowio.app?subject=Enterprise%20Inquiry"
-          className="mt-8 inline-flex items-center rounded-lg bg-purple-600 px-6 py-3 text-white hover:bg-purple-700 transition-colors font-medium"
-        >
-          Contact Enterprise Team
-        </Link>
       </div>
 
       {/* Comparison */}

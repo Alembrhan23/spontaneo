@@ -1,122 +1,148 @@
 // src/app/api/stripe/webhook/route.ts
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient as createSB } from '@supabase/supabase-js'
+import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
-
-// ADMIN client (service role) bypasses RLS. NEVER expose this key to the browser.
-const supabase = createSB(
+const supabase = createSupabaseAdmin(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,          // ← add this env in your server (e.g., Vercel Prod)
-  { auth: { persistSession: false, autoRefreshToken: false } }
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,   // server-only key
+  { auth: { persistSession: false } }
 )
 
-type Plan = 'plus' | 'business_pro' | 'unknown'
-type Interval = 'monthly' | 'annual' | 'week' | 'unknown'
-
-function inferPlan(price: Stripe.Price | null | undefined): { plan: Plan; interval: Interval } {
-  const lookup = (price?.lookup_key || '').toLowerCase()
-  const id = price?.id
-
-  if (lookup.includes('plus') && lookup.includes('monthly')) return { plan: 'plus', interval: 'monthly' }
-  if (lookup.includes('plus') && lookup.includes('annual'))  return { plan: 'plus', interval: 'annual' }
-  if ((lookup.includes('bpro') || lookup.includes('business_pro')) && lookup.includes('monthly'))
-    return { plan: 'business_pro', interval: 'monthly' }
-  if ((lookup.includes('bpro') || lookup.includes('business_pro')) && lookup.includes('annual'))
-    return { plan: 'business_pro', interval: 'annual' }
-
-  // also allow ENV fallbacks if you set PRICE_* env vars
-  if (process.env.PRICE_PLUS_MONTHLY === id)  return { plan: 'plus', interval: 'monthly' }
-  if (process.env.PRICE_PLUS_ANNUAL === id)   return { plan: 'plus', interval: 'annual' }
-  if (process.env.PRICE_BPRO_MONTHLY === id)  return { plan: 'business_pro', interval: 'monthly' }
-  if (process.env.PRICE_BPRO_ANNUAL === id)   return { plan: 'business_pro', interval: 'annual' }
-
-  return { plan: 'unknown', interval: (price?.recurring?.interval as Interval) || 'unknown' }
-}
-
-async function upsertSubscription(sub: Stripe.Subscription, userId?: string) {
-  const price = (sub.items.data[0]?.price as Stripe.Price) || null
-  const { plan, interval } = inferPlan(price)
-  const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
-  const status = sub.status
-  const periodEnd = new Date(sub.current_period_end * 1000).toISOString()
-
-  await supabase.from('user_subscriptions').upsert(
-    {
-      user_id: userId ?? null,
-      stripe_customer_id: customerId,
-      stripe_subscription_id: sub.id,
-      plan,
-      interval,
-      status,
-      current_period_end: periodEnd,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'stripe_subscription_id' }
-  )
+// Small helper
+async function upsertSub(
+  user_id: string,
+  data: {
+    stripe_customer_id?: string | null
+    stripe_subscription_id?: string | null
+    price_id?: string | null
+    plan?: string | null
+    interval?: string | null
+    status?: string | null
+    current_period_end?: string | null
+  }
+) {
+  await supabase
+    .from('user_subscriptions')
+    .upsert({ user_id, ...data }, { onConflict: 'user_id' })
 }
 
 export async function POST(req: Request) {
-  const raw = await req.text()
-  const sig = req.headers.get('stripe-signature')!
+  const sig = req.headers.get('stripe-signature') || ''
+  const secret = process.env.STRIPE_WEBHOOK_SECRET
+  if (!secret) return NextResponse.json({ error: 'Missing STRIPE_WEBHOOK_SECRET' }, { status: 500 })
 
+  const body = await req.text()
   let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(raw, sig, endpointSecret)
+    event = stripe.webhooks.constructEvent(body, sig, secret)
   } catch (err: any) {
     return NextResponse.json({ error: `Bad signature: ${err.message}` }, { status: 400 })
   }
 
   try {
     switch (event.type) {
+      // ✅ When checkout finishes, capture the mapping (user ↔ customer/subscription)
       case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session
-        if (session.mode === 'subscription' && session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(
-            typeof session.subscription === 'string' ? session.subscription : session.subscription.id
-          )
-          const userId =
-            (session.metadata?.userId as string | undefined) ||
-            (session.client_reference_id as string | undefined)
-          await upsertSubscription(sub, userId)
+        const s = event.data.object as Stripe.Checkout.Session
+        if (s.mode !== 'subscription') break
+        const userId = (s.metadata?.userId || s.client_reference_id) as string | undefined
+        const customerId = (typeof s.customer === 'string' ? s.customer : s.customer?.id) || null
+        const subId = (typeof s.subscription === 'string' ? s.subscription : s.subscription?.id) || null
 
-          // also persist customer↔user mapping for portal
-          if (userId && session.customer) {
-            await supabase.from('user_subscriptions').upsert(
-              { user_id: userId, stripe_customer_id: session.customer as string },
-              { onConflict: 'user_id' }
-            )
+        // Fetch subscription for details
+        let priceId: string | null = null
+        let interval: string | null = null
+        let status: string | null = null
+        let currentPeriodEnd: string | null = null
+        let plan: string | null = (s.metadata?.plan as string) || null
+
+        if (subId) {
+          const sub = await stripe.subscriptions.retrieve(subId)
+          const item = sub.items.data[0]
+          priceId = item?.price?.id || null
+          interval = (item?.price?.recurring?.interval as string) || null
+          status = sub.status || null
+          currentPeriodEnd = sub.current_period_end
+            ? new Date(sub.current_period_end * 1000).toISOString()
+            : null
+
+          if (!plan) {
+            const lookup = item?.price?.lookup_key || ''
+            if (lookup?.includes('bpro')) plan = 'business_pro'
+            else if (lookup?.includes('plus')) plan = 'plus'
           }
+          if (!plan && sub.metadata?.plan) plan = sub.metadata.plan
+        }
+
+        if (userId && customerId) {
+          await upsertSub(userId, {
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subId,
+            price_id: priceId,
+            plan,
+            interval,
+            status,
+            current_period_end: currentPeriodEnd,
+          })
         }
         break
       }
 
+      // ✅ Keep row up to date when Stripe changes the subscription (upgrades, cancels, portal changes)
       case 'customer.subscription.created':
-      case 'customer.subscription.updated': {
-        const sub = event.data.object as Stripe.Subscription
-        await upsertSubscription(sub, sub.metadata?.userId as string | undefined)
-        break
-      }
-
+      case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription
-        const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
-        await supabase
-          .from('user_subscriptions')
-          .update({ status: 'canceled', updated_at: new Date().toISOString() })
-          .eq('stripe_subscription_id', sub.id)
-          .eq('stripe_customer_id', customerId)
+        const customerId = (typeof sub.customer === 'string' ? sub.customer : sub.customer?.id) || null
+        const item = sub.items.data[0]
+        const priceId = item?.price?.id || null
+        const interval = (item?.price?.recurring?.interval as string) || null
+        const status = sub.status || null
+        const currentPeriodEnd = sub.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString()
+          : null
+
+        let plan: string | null = (sub.metadata?.plan as string) || null
+        if (!plan) {
+          const lookup = item?.price?.lookup_key || ''
+          if (lookup?.includes('bpro')) plan = 'business_pro'
+          else if (lookup?.includes('plus')) plan = 'plus'
+        }
+
+        // Find the user: prefer metadata.userId; else find existing row by customer id
+        let userId = (sub.metadata?.userId as string) || null
+        if (!userId && customerId) {
+          const { data: existing } = await supabase
+            .from('user_subscriptions')
+            .select('user_id')
+            .eq('stripe_customer_id', customerId)
+            .maybeSingle()
+          userId = existing?.user_id ?? null
+        }
+
+        if (userId) {
+          await upsertSub(userId, {
+            stripe_customer_id: customerId,
+            stripe_subscription_id: sub.id,
+            price_id: priceId,
+            plan,
+            interval,
+            status,
+            current_period_end: currentPeriodEnd,
+          })
+        }
         break
       }
 
-      // ✅ Fix the column name here: set is_verified (not verified)
+      // (Optional) keep your identity verification here too, using service role:
       case 'identity.verification_session.verified': {
-        const vs = event.data.object as Stripe.Identity.VerificationSession
-        const userId = vs.metadata?.userId
+        const session = event.data.object as Stripe.Identity.VerificationSession
+        const userId = session.metadata?.userId
         if (userId) {
           await supabase.from('profiles').update({ is_verified: true }).eq('id', userId)
         }
@@ -124,12 +150,12 @@ export async function POST(req: Request) {
       }
 
       default:
-        // ignore others
+        // ignore other events
         break
     }
 
     return NextResponse.json({ received: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Webhook handler error' }, { status: 500 })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Webhook handler error' }, { status: 500 })
   }
 }
