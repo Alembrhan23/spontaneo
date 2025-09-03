@@ -1,22 +1,17 @@
+// src/components/HomeHeader.tsx
 'use client'
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 
-/**
- * Marketing header for the home page.
- * Renders ONLY when the user is signed out (no double headers).
- */
 export default function HomeHeader() {
   const { user, loading } = useAuth()
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
 
-  // Don’t render while auth is loading to prevent a brief double-header flash.
   if (loading || user) return null
 
-  // Close mobile panel on outside click
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!panelRef.current) return
@@ -36,8 +31,10 @@ export default function HomeHeader() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-6 text-sm">
+          <a href="#activities" className="text-gray-700 hover:text-gray-900">Activities</a>
           <a href="#how" className="text-gray-700 hover:text-gray-900">How It Works</a>
           <a href="#niches" className="text-gray-700 hover:text-gray-900">Popular Categories</a>
+          <Link href="/pricing" className="text-gray-700 hover:text-gray-900">Pricing</Link>
         </nav>
 
         <div className="hidden md:flex items-center gap-2">
@@ -63,28 +60,24 @@ export default function HomeHeader() {
         <div ref={panelRef} className="md:hidden border-t bg-white">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3">
             <div className="flex flex-col gap-2">
-              <a href="#how" className="mobile-item">How It Works</a>
-              <a href="#niches" className="mobile-item">Popular Categories</a>
+              <a href="#activities" className="mobile-item" onClick={() => setOpen(false)}>Activities</a>
+              <a href="#how" className="mobile-item" onClick={() => setOpen(false)}>How It Works</a>
+              <a href="#niches" className="mobile-item" onClick={() => setOpen(false)}>Popular Categories</a>
+              <Link href="/pricing" className="mobile-item" onClick={() => setOpen(false)}>Pricing</Link>
               <div className="h-px bg-gray-200 my-2" />
               <div className="flex gap-2">
-                <Link href="/login" className="btn-cta-ghost flex-1">Sign In</Link>
-                <Link href="/signup" className="btn-cta-primary flex-1">Get Started</Link>
+                <Link href="/login" className="btn-cta-ghost flex-1" onClick={() => setOpen(false)}>Sign In</Link>
+                <Link href="/signup" className="btn-cta-primary flex-1" onClick={() => setOpen(false)}>Get Started</Link>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tiny styles used by this header */}
       <style>{`
-        .btn-cta-primary {
-          padding:.55rem .9rem;border-radius:10px;font-weight:600;color:#fff;background:#4f46e5;
-          box-shadow:0 6px 16px rgba(79,70,229,.18)
-        }
+        .btn-cta-primary { padding:.55rem .9rem;border-radius:10px;font-weight:600;color:#fff;background:#4f46e5;box-shadow:0 6px 16px rgba(79,70,229,.18) }
         .btn-cta-primary:hover { filter:saturate(1.08) }
-        .btn-cta-ghost {
-          padding:.55rem .9rem;border-radius:10px;font-weight:600;border:1px solid #e5e7eb;background:#fff
-        }
+        .btn-cta-ghost { padding:.55rem .9rem;border-radius:10px;font-weight:600;border:1px solid #e5e7eb;background:#fff }
         .btn-cta-ghost:hover { background:#f3f4f6 }
         .mobile-item { padding:.6rem .25rem;border-radius:.5rem;color:#111827 }
         .mobile-item:hover { background:#f9fafb }

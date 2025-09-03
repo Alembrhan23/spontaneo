@@ -1,4 +1,3 @@
-// src/app/page.tsx
 'use client'
 
 import Link from 'next/link'
@@ -21,6 +20,22 @@ export default function Home() {
       setCheckingAuth(false)
     })()
   }, [router])
+
+  // 🔽 NEW: mobile menu state + small helpers
+  const [mobileOpen, setMobileOpen] = useState(false)
+  // lock body scroll when menu is open
+  useEffect(() => {
+    if (mobileOpen) document.body.style.overflow = 'hidden'
+    else document.body.style.overflow = ''
+    return () => { document.body.style.overflow = '' }
+  }, [mobileOpen])
+  // close on Esc
+  useEffect(() => {
+    if (!mobileOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mobileOpen])
 
   // Smooth scroll implementation
   useEffect(() => {
@@ -45,6 +60,8 @@ export default function Home() {
       e.preventDefault()
       scrollToHash(a.hash, true)
       history.pushState(null, '', a.hash)
+      // if we navigated from the mobile panel, close it
+      setMobileOpen(false)
     }
 
     document.addEventListener('click', onClick)
@@ -65,20 +82,21 @@ export default function Home() {
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-white via-indigo-50/20 to-amber-50/20"
       />
-      {/* UPDATED: add pointer-events-none and -z-10 so these don’t block taps */}
+      {/* keep these non-interactive so they don't block taps */}
       <div
         className="pointer-events-none absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50 -z-10"
         aria-hidden
-      ></div>
+      />
       <div
         className="pointer-events-none absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-96 h-96 bg-amber-100 rounded-full blur-3xl opacity-40 -z-10"
         aria-hidden
-      ></div>
+      />
 
-      {/* ===================== Improved Header ===================== */}
+      {/* ===================== Header (desktop + mobile hamburger) ===================== */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-5 py-4">
           <div className="flex items-center justify-between">
+            {/* Brand */}
             <Link href="/" className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-indigo-600 to-amber-500 flex items-center justify-center text-white font-bold">
                 N
@@ -86,6 +104,7 @@ export default function Home() {
               <span className="text-xl font-bold text-gray-900">Nowio</span>
             </Link>
 
+            {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-6">
               <a
                 href="#activities"
@@ -105,9 +124,17 @@ export default function Home() {
               >
                 Popular Categories
               </a>
+              {/* NEW: Pricing on desktop */}
+              <Link
+                href="/pricing"
+                className="text-gray-700 hover:text-indigo-600 transition-colors font-medium"
+              >
+                Pricing
+              </Link>
             </nav>
 
-            <div className="flex items-center gap-3">
+            {/* Desktop CTAs */}
+            <div className="hidden md:flex items-center gap-3">
               <Link
                 href="/login"
                 className="px-4 py-2 text-gray-700 hover:text-indigo-600 font-medium transition-colors"
@@ -121,6 +148,92 @@ export default function Home() {
                 Get Started
               </Link>
             </div>
+
+            {/* Mobile hamburger */}
+            <button
+              type="button"
+              onClick={() => setMobileOpen(v => !v)}
+              aria-expanded={mobileOpen}
+              aria-controls="mobile-menu"
+              className="md:hidden inline-flex items-center justify-center rounded-lg p-2 border border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
+              {mobileOpen ? (
+                // Close icon
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              ) : (
+                // Hamburger icon
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile overlay + panel */}
+        <div className={`${mobileOpen ? 'pointer-events-auto' : 'pointer-events-none'} md:hidden`}>
+          {/* Backdrop */}
+          <div
+            onClick={() => setMobileOpen(false)}
+            className={`fixed inset-0 bg-black/20 transition-opacity ${mobileOpen ? 'opacity-100' : 'opacity-0'}`}
+            aria-hidden="true"
+          />
+          {/* Panel */}
+          <div
+            id="mobile-menu"
+            className={`absolute inset-x-0 top-full origin-top bg-white shadow-lg border-t border-gray-100 transition transform ${
+              mobileOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+            }`}
+          >
+            <nav className="px-4 py-3">
+              <a
+                href="#activities"
+                onClick={() => setMobileOpen(false)}
+                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
+              >
+                Activities
+              </a>
+              <a
+                href="#how"
+                onClick={() => setMobileOpen(false)}
+                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
+              >
+                How It Works
+              </a>
+              <a
+                href="#niches"
+                onClick={() => setMobileOpen(false)}
+                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
+              >
+                Popular Categories
+              </a>
+              <Link
+                href="/pricing"
+                onClick={() => setMobileOpen(false)}
+                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
+              >
+                Pricing
+              </Link>
+
+              <div className="my-2 border-t border-gray-100" />
+
+              <Link
+                href="/login"
+                onClick={() => setMobileOpen(false)}
+                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/signup"
+                onClick={() => setMobileOpen(false)}
+                className="mt-1 block w-full text-center px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium"
+              >
+                Get Started
+              </Link>
+            </nav>
           </div>
         </div>
       </header>
@@ -245,54 +358,12 @@ export default function Home() {
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              {
-                emoji: '☕',
-                title: 'Coffee & Cowork',
-                time: 'Today • 10:00 AM',
-                location: 'Thump Coffee • RiNo',
-                attendees: 4,
-                status: 'Open',
-              },
-              {
-                emoji: '🏓',
-                title: 'Pickleball Social',
-                time: 'Today • 5:30 PM',
-                location: 'Central Park Courts',
-                attendees: 6,
-                status: 'Almost full',
-              },
-              {
-                emoji: '🍻',
-                title: 'Brewery Hangout',
-                time: 'Tomorrow • 7:00 PM',
-                location: 'Ratio Beerworks',
-                attendees: 3,
-                status: 'Open',
-              },
-              {
-                emoji: '🎨',
-                title: 'First Friday Art Walk',
-                time: 'Fri • 6:00 PM',
-                location: 'Santa Fe Arts District',
-                attendees: 8,
-                status: 'Open',
-              },
-              {
-                emoji: '🚶',
-                title: 'City Park Walk',
-                time: 'Sat • 9:00 AM',
-                location: 'City Park • Five Points',
-                attendees: 5,
-                status: 'Open',
-              },
-              {
-                emoji: '🎲',
-                title: 'Board Game Night',
-                time: 'Sat • 6:30 PM',
-                location: 'The Wizards Chest',
-                attendees: 7,
-                status: 'Almost full',
-              },
+              { emoji: '☕', title: 'Coffee & Cowork', time: 'Today • 10:00 AM', location: 'Thump Coffee • RiNo', attendees: 4, status: 'Open' },
+              { emoji: '🏓', title: 'Pickleball Social', time: 'Today • 5:30 PM', location: 'Central Park Courts', attendees: 6, status: 'Almost full' },
+              { emoji: '🍻', title: 'Brewery Hangout', time: 'Tomorrow • 7:00 PM', location: 'Ratio Beerworks', attendees: 3, status: 'Open' },
+              { emoji: '🎨', title: 'First Friday Art Walk', time: 'Fri • 6:00 PM', location: 'Santa Fe Arts District', attendees: 8, status: 'Open' },
+              { emoji: '🚶', title: 'City Park Walk', time: 'Sat • 9:00 AM', location: 'City Park • Five Points', attendees: 5, status: 'Open' },
+              { emoji: '🎲', title: 'Board Game Night', time: 'Sat • 6:30 PM', location: 'The Wizards Chest', attendees: 7, status: 'Almost full' },
             ].map((activity, index) => (
               <div
                 key={index}
@@ -324,7 +395,7 @@ export default function Home() {
                         <div
                           key={i}
                           className="w-6 h-6 rounded-full bg-gray-300 border-2 border-white"
-                        ></div>
+                        />
                       ))}
                     </div>
                     <span className="text-xs text-gray-500 ml-2">
