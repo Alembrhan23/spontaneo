@@ -4,11 +4,9 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
-// TODO: paste your Stripe Payment Links when ready
-const STRIPE_PLUS_LINK = '#'
-const STRIPE_VENUE_LINK = '#'
-
 type Tab = 'consumer' | 'business'
+type Interval = 'monthly' | 'annual'
+type Plan = 'plus' | 'business_pro'
 
 export default function PricingPage() {
   const [tab, setTab] = useState<Tab>('consumer')
@@ -19,8 +17,30 @@ export default function PricingPage() {
     : { label: '$3.99/mo', sub: 'billed monthly' }
 
   const priceVenue = annual
-    ? { label: '$149/mo', sub: 'or $1,499/year (save 16%)' }
+    ? { label: '$1,499/yr', sub: '≈ $125/mo billed annually' }
     : { label: '$149/mo', sub: 'billed monthly' }
+
+  async function startCheckout(plan: Plan, interval: Interval) {
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ plan, interval }),
+      })
+      if (res.status === 401) {
+        window.location.href = '/login?next=/pricing'
+        return
+      }
+      const data = await res.json()
+      if (data?.url) {
+        window.location.href = data.url as string
+      } else {
+        alert(data?.error || 'Could not start checkout')
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Network error')
+    }
+  }
 
   return (
     <div className="bg-gradient-to-b from-indigo-50 via-white to-white min-h-screen">
@@ -79,9 +99,16 @@ export default function PricingPage() {
       {/* Content */}
       <main className="mx-auto max-w-6xl px-6 py-12 sm:py-16">
         {tab === 'consumer' ? (
-          <ConsumerSection pricePlus={pricePlus} />
+          <ConsumerSection
+            pricePlus={pricePlus}
+            onPlusClick={() => startCheckout('plus', annual ? 'annual' : 'monthly')}
+          />
         ) : (
-          <BusinessSection priceVenue={priceVenue} annual={annual} />
+          <BusinessSection
+            priceVenue={priceVenue}
+            annual={annual}
+            onBproClick={() => startCheckout('business_pro', annual ? 'annual' : 'monthly')}
+          />
         )}
 
         {/* Shared CTA */}
@@ -110,7 +137,13 @@ export default function PricingPage() {
 
 /* ---------------------------- B2C Section ---------------------------- */
 
-function ConsumerSection({ pricePlus }: { pricePlus: { label: string; sub: string } }) {
+function ConsumerSection({
+  pricePlus,
+  onPlusClick,
+}: {
+  pricePlus: { label: string; sub: string }
+  onPlusClick: () => void
+}) {
   return (
     <>
       {/* Plans */}
@@ -121,14 +154,14 @@ function ConsumerSection({ pricePlus }: { pricePlus: { label: string; sub: strin
           title="Explorer"
           price="Free"
           sub="Perfect for trying out Nowio"
-          cta={{ href: '/signup', label: 'Get Started' }}
+          cta={{ label: 'Get Started', href: '/signup' }}
           features={[
             'Join up to 3 activities daily',
             'Basic event notifications',
             'Chat with activity members',
             'Explore your neighborhood',
             'Create your profile',
-            'Message other members'
+            'Message other members',
           ]}
           perks={[]}
           foot="No credit card needed"
@@ -141,20 +174,20 @@ function ConsumerSection({ pricePlus }: { pricePlus: { label: string; sub: strin
           price={pricePlus.label}
           sub={pricePlus.sub}
           highlight
-          cta={{ href: STRIPE_PLUS_LINK, label: 'Get Plus' }}
+          cta={{ label: 'Get Plus', onClick: onPlusClick }}
           features={[
             'Join unlimited activities',
             'Get first access to popular events',
             'Special birthday rewards at partner venues',
             'Priority notifications for last-minute plans',
             'Exclusive member badge',
-            'Create unlimited activities'
+            'Create unlimited activities',
           ]}
           perks={[
             'Sponsored free drinks at partner venues',
             'Birthday month special treats',
             'VIP access to special events',
-            'Member-only discounts at local businesses'
+            'Member-only discounts at local businesses',
           ]}
           foot="Cancel anytime, no questions asked"
         />
@@ -194,7 +227,9 @@ function ConsumerSection({ pricePlus }: { pricePlus: { label: string; sub: strin
             </tbody>
           </table>
         </div>
-        <p className="mt-4 text-sm text-gray-500 text-center">All plans help you connect with local businesses and people</p>
+        <p className="mt-4 text-sm text-gray-500 text-center">
+          All plans help you connect with local businesses and people
+        </p>
       </section>
     </>
   )
@@ -202,7 +237,15 @@ function ConsumerSection({ pricePlus }: { pricePlus: { label: string; sub: strin
 
 /* ---------------------------- B2B Section ---------------------------- */
 
-function BusinessSection({ priceVenue, annual }: { priceVenue: { label: string; sub: string }; annual: boolean }) {
+function BusinessSection({
+  priceVenue,
+  annual,
+  onBproClick,
+}: {
+  priceVenue: { label: string; sub: string }
+  annual: boolean
+  onBproClick: () => void
+}) {
   return (
     <>
       {/* Dashboard Preview */}
@@ -214,22 +257,17 @@ function BusinessSection({ priceVenue, annual }: { priceVenue: { label: string; 
               Understand your customers, track event performance, and grow your business with our powerful analytics tools.
             </p>
             <ul className="mt-6 space-y-3">
-              <li className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 flex-shrink-0">✓</div>
-                <span>Real-time attendance tracking</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 flex-shrink-0">✓</div>
-                <span>Customer demographics & preferences</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 flex-shrink-0">✓</div>
-                <span>Revenue impact reporting</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 flex-shrink-0">✓</div>
-                <span>Peak hours & day analysis</span>
-              </li>
+              {[
+                'Real-time attendance tracking',
+                'Customer demographics & preferences',
+                'Revenue impact reporting',
+                'Peak hours & day analysis',
+              ].map((t) => (
+                <li className="flex items-center gap-3" key={t}>
+                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 flex-shrink-0">✓</div>
+                  <span>{t}</span>
+                </li>
+              ))}
             </ul>
           </div>
           <div className="lg:w-1/2">
@@ -266,7 +304,7 @@ function BusinessSection({ priceVenue, annual }: { priceVenue: { label: string; 
             'Message attendees directly',
             'Email support',
             'Promote one venue location',
-            'Basic performance metrics'
+            'Basic performance metrics',
           ]}
           perks={[]}
           foot="Perfect for testing the platform"
@@ -277,9 +315,9 @@ function BusinessSection({ priceVenue, annual }: { priceVenue: { label: string; 
           accent="from-blue-50 to-white"
           title="Business Pro"
           price={annual ? '$1,499/year' : '$149/month'}
-          sub={annual ? 'Save 16% with annual billing' : 'Monthly billing with no commitment'}
+          sub={annual ? 'Save ~16% with annual billing' : 'Monthly billing with no commitment'}
           highlight
-          cta={{ href: STRIPE_VENUE_LINK, label: 'Get Business Pro' }}
+          cta={{ label: 'Get Business Pro', onClick: onBproClick }}
           features={[
             'Unlimited featured listings',
             'Priority placement in app',
@@ -289,14 +327,14 @@ function BusinessSection({ priceVenue, annual }: { priceVenue: { label: string; 
             'Priority business support',
             'Promote multiple venues',
             'Revenue impact reports',
-            'Peak hours analysis'
+            'Peak hours analysis',
           ]}
           perks={[
             'Featured in neighborhood guides',
             'Special event promotions',
             'Customer behavior insights',
             'Competitive analysis reports',
-            'API access for data export'
+            'API access for data export',
           ]}
           foot="Complete business intelligence suite"
         />
@@ -309,33 +347,16 @@ function BusinessSection({ priceVenue, annual }: { priceVenue: { label: string; 
           For businesses with multiple locations, custom integration needs, or advanced analytics requirements.
         </p>
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          <div className="bg-white p-4 rounded-lg border border-purple-100">
-            <div className="w-10 h-10 mx-auto mb-3 bg-purple-100 rounded-lg flex items-center justify-center text-purple-700">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-4 0H9m4 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v10m4 0h4m-4 0V9"></path>
-              </svg>
+          {[
+            { h: 'Multi-Location Management', p: 'Manage all your venues from a single dashboard' },
+            { h: 'Custom Analytics', p: 'Tailored reports and business intelligence' },
+            { h: 'API Integration', p: 'Connect with your existing systems' },
+          ].map((x) => (
+            <div key={x.h} className="bg-white p-4 rounded-lg border border-purple-100">
+              <h4 className="font-semibold text-gray-900">{x.h}</h4>
+              <p className="text-sm text-gray-600 mt-2">{x.p}</p>
             </div>
-            <h4 className="font-semibold text-gray-900">Multi-Location Management</h4>
-            <p className="text-sm text-gray-600 mt-2">Manage all your venues from a single dashboard</p>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-purple-100">
-            <div className="w-10 h-10 mx-auto mb-3 bg-purple-100 rounded-lg flex items-center justify-center text-purple-700">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-              </svg>
-            </div>
-            <h4 className="font-semibold text-gray-900">Custom Analytics</h4>
-            <p className="text-sm text-gray-600 mt-2">Tailored reports and business intelligence</p>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-purple-100">
-            <div className="w-10 h-10 mx-auto mb-3 bg-purple-100 rounded-lg flex items-center justify-center text-purple-700">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
-              </svg>
-            </div>
-            <h4 className="font-semibold text-gray-900">API Integration</h4>
-            <p className="text-sm text-gray-600 mt-2">Connect with your existing systems</p>
-          </div>
+          ))}
         </div>
         <Link
           href="mailto:enterprise@nowio.app?subject=Enterprise%20Inquiry"
@@ -381,7 +402,9 @@ function BusinessSection({ priceVenue, annual }: { priceVenue: { label: string; 
             </tbody>
           </table>
         </div>
-        <p className="mt-4 text-sm text-gray-500 text-center">All plans include dashboard access with varying levels of features</p>
+        <p className="mt-4 text-sm text-gray-500 text-center">
+          All plans include dashboard access with varying levels of features
+        </p>
       </section>
     </>
   )
@@ -398,7 +421,7 @@ function PlanCard({
   perks,
   cta,
   highlight = false,
-  foot
+  foot,
 }: {
   accent: string
   title: string
@@ -406,10 +429,32 @@ function PlanCard({
   sub?: string
   features: string[]
   perks: string[]
-  cta: { href: string; label: string }
+  cta: { href?: string; label: string; onClick?: () => void }
   highlight?: boolean
   foot?: string
 }) {
+  const CtaEl = cta.onClick
+    ? (
+      <button
+        onClick={cta.onClick}
+        className={`inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-base font-medium transition-colors ${
+          highlight ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md' : 'border border-gray-300 text-gray-900 hover:bg-gray-50'
+        }`}
+      >
+        {cta.label}
+      </button>
+    )
+    : (
+      <Link
+        href={cta.href || '#'}
+        className={`inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-base font-medium transition-colors ${
+          highlight ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md' : 'border border-gray-300 text-gray-900 hover:bg-gray-50'
+        }`}
+      >
+        {cta.label}
+      </Link>
+    )
+
   return (
     <div
       className={`rounded-2xl border shadow-sm bg-gradient-to-b ${accent} p-8 flex flex-col h-full ${
@@ -417,15 +462,15 @@ function PlanCard({
       }`}
     >
       {highlight && (
-        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="rounded-full bg-blue-600 px-3 py-1 text-sm font-medium text-white shadow-md">Most Popular</span>
         </div>
       )}
-      
+
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
       </div>
-      
+
       <div className="mt-2 mb-6">
         <div className="text-3xl font-bold text-gray-900">{price}</div>
         {sub && <div className="text-sm text-gray-600 mt-1">{sub}</div>}
@@ -458,16 +503,7 @@ function PlanCard({
       </div>
 
       <div className="mt-auto">
-        <Link
-          href={cta.href}
-          className={`inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-base font-medium transition-colors ${
-            highlight 
-              ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md' 
-              : 'border border-gray-300 text-gray-900 hover:bg-gray-50'
-          }`}
-        >
-          {cta.label}
-        </Link>
+        {CtaEl}
         {foot && <p className="mt-3 text-xs text-gray-500 text-center">{foot}</p>}
       </div>
     </div>

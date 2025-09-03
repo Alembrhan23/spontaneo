@@ -14,6 +14,14 @@ type Profile = {
   socials: Socials
 }
 
+type Subscription = {
+  stripe_customer_id: string | null
+  status: string | null
+  plan: 'plus' | 'business_pro' | null
+  interval: 'monthly' | 'annual' | null
+  current_period_end: string | null
+}
+
 const NEIGHBORHOODS = ['RiNo', 'LoHi', 'Five Points'] as const
 const SOCIAL_KEYS: (keyof Socials)[] = ['website','instagram','twitter','tiktok','linkedin']
 
@@ -66,6 +74,8 @@ export default function ProfilePage() {
     socials: {}
   })
   const [vp, setVp] = useState<number>(0)
+  const [sub, setSub] = useState<Subscription | null>(null)
+  const [billingBusy, setBillingBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -75,6 +85,7 @@ export default function ProfilePage() {
       if (!user) { router.push('/login'); return }
       setUserId(user.id)
 
+      // ensure a row exists
       await supabase.from('profiles').upsert({ id: user.id }, { onConflict: 'id' })
 
       const { data, error } = await supabase
@@ -94,12 +105,21 @@ export default function ProfilePage() {
         socials: (data?.socials ?? {}) as Socials
       })
 
+      // VibePoints balance (optional; safe if table exists)
       const { data: bal } = await supabase
         .from('vibe_points_balance')
         .select('balance')
         .eq('user_id', user.id)
         .maybeSingle()
       setVp(bal?.balance ?? 0)
+
+      // Subscription snapshot (optional; safe if table exists)
+      const { data: subRow } = await supabase
+        .from('user_subscriptions')
+        .select('stripe_customer_id, status, plan, interval, current_period_end')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      setSub(subRow ?? null)
 
       setLoading(false)
     })()
@@ -110,6 +130,7 @@ export default function ProfilePage() {
     if (!userId) return
     setSaving(true)
 
+    // Clean socials: keep only known keys and valid URLs
     const cleaned: Socials = {}
     for (const key of SOCIAL_KEYS) {
       const raw = (p.socials?.[key] || '').trim()
@@ -144,6 +165,21 @@ export default function ProfilePage() {
 
     const { data } = supabase.storage.from('avatars').getPublicUrl(path)
     setP(prev => ({ ...prev, avatar_url: data.publicUrl }))
+  }
+
+  async function openPortal() {
+    try {
+      setBillingBusy(true)
+      const res = await fetch('/api/portal', { method: 'POST' })
+      if (res.status === 401) { router.push('/login?next=/pp/profile'); return }
+      const data = await res.json()
+      if (data?.url) window.location.href = data.url
+      else alert(data?.error || 'No subscription to manage.')
+    } catch (e: any) {
+      alert(e?.message || 'Something went wrong.')
+    } finally {
+      setBillingBusy(false)
+    }
   }
 
   async function logout() {
@@ -183,6 +219,24 @@ export default function ProfilePage() {
 
           {/* Actions — full-width on mobile, inline on desktop */}
           <div className="flex gap-2 w-full sm:w-auto">
+            {/* Manage plan or Upgrade */}
+            {sub?.stripe_customer_id ? (
+              <button
+                onClick={openPortal}
+                disabled={billingBusy}
+                className="flex-1 sm:flex-none rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
+              >
+                {billingBusy ? 'Opening…' : 'Manage plan'}
+              </button>
+            ) : (
+              <a
+                href="/pricing"
+                className="flex-1 sm:flex-none rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50 text-center"
+              >
+                Upgrade
+              </a>
+            )}
+
             {!p.is_verified && (
               <a
                 href="/verify/start"
@@ -289,6 +343,41 @@ export default function ProfilePage() {
               <div className="text-sm text-gray-500">No social links yet.</div>
             )}
           </div>
+        </div>
+
+        {/* Billing summary */}
+        <div className="pt-4 border-t">
+          <h2 className="font-semibold mb-2">Billing</h2>
+          {sub ? (
+            <div className="text-sm text-gray-700 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5">
+                  {(sub.plan === 'business_pro' ? 'Business Pro' : 'Social Plus')}{sub.interval ? ` • ${sub.interval}` : ''}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">
+                  {sub.status ?? '—'}
+                </span>
+                {sub.current_period_end && (
+                  <span className="text-gray-500">
+                    renews {new Date(sub.current_period_end).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+              <div>
+                <button
+                  onClick={openPortal}
+                  disabled={billingBusy}
+                  className="rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  {billingBusy ? 'Opening…' : 'Manage plan'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-600">
+              No active subscription. <a href="/pricing" className="text-indigo-600 hover:underline">See plans</a>
+            </div>
+          )}
         </div>
       </div>
     </div>
