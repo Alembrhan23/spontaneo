@@ -1,130 +1,165 @@
-// src/app/api/webhooks/stripe/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
+// app/api/webhooks/stripe/route.ts
+import { NextResponse } from "next/server"
+import Stripe from "stripe"
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
 
-export const runtime = 'nodejs'
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY! // service role (server only!)
-const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET!
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false }
-})
-
-async function upsertSub(userId: string, fields: Partial<{
-  stripe_customer_id: string | null
-  stripe_subscription_id: string | null
-  price_id: string | null
-  plan: string | null
-}>) {
-  // Upsert by user_id (PK in your screenshot)
-  const { error } = await supabase
-    .from('user_subscriptions')
-    .upsert({ user_id: userId, ...fields }, { onConflict: 'user_id' })
-  if (error) throw error
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error("Missing STRIPE_SECRET_KEY")
+  return new Stripe(key, { apiVersion: "2024-06-20" })
+}
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) throw new Error("Missing Supabase admin envs")
+  return createSupabaseAdmin(url, key, { auth: { persistSession: false } })
 }
 
-// Find our user_id from a Stripe customer id, by reading the existing row
-async function userIdFromCustomer(customerId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('user_subscriptions')
-    .select('user_id')
-    .eq('stripe_customer_id', customerId)
-    .maybeSingle()
-  if (error) return null
-  return data?.user_id ?? null
+async function upsertSub(
+  supabase: ReturnType<typeof getSupabase>,
+  user_id: string,
+  data: {
+    stripe_customer_id?: string | null
+    stripe_subscription_id?: string | null
+    price_id?: string | null
+    plan?: string | null
+    interval?: string | null
+    status?: string | null
+    current_period_end?: string | null
+  }
+) {
+  await supabase
+    .from("user_subscriptions")
+    .upsert({ user_id, ...data }, { onConflict: "user_id" })
 }
 
-export async function POST(req: NextRequest) {
-  const raw = await req.text()
-  const sig = req.headers.get('stripe-signature')
+export async function POST(req: Request) {
+  const stripe = getStripe()
+  const supabase = getSupabase()
+
+  const sig = req.headers.get("stripe-signature") || ""
+  const secret = process.env.STRIPE_WEBHOOK_SECRET
+  if (!secret) return NextResponse.json({ error: "Missing STRIPE_WEBHOOK_SECRET" }, { status: 500 })
+
+  const body = await req.text()
 
   let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(raw, sig!, WEBHOOK_SECRET)
+    event = stripe.webhooks.constructEvent(body, sig, secret)
   } catch (err: any) {
-    return NextResponse.json({ error: `Invalid signature: ${err.message}` }, { status: 400 })
+    return NextResponse.json({ error: `Bad signature: ${err.message}` }, { status: 400 })
   }
 
   try {
     switch (event.type) {
-      // After checkout completes we know: session.subscription, session.customer and client_reference_id (your user_id)
-      case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session
-        const userId = (session.client_reference_id || session.metadata?.userId) as string | undefined
-        const customerId = typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id
-        const subscriptionId = typeof session.subscription === 'string'
-          ? session.subscription
-          : (session.subscription as any)?.id
+      case "checkout.session.completed": {
+        const s = event.data.object as Stripe.Checkout.Session
+        if (s.mode !== "subscription") break
 
-        // Try to get the price_id from the line item for your schema
+        const userId = (s.metadata?.userId || s.client_reference_id) as string | undefined
+        const customerId =
+          (typeof s.customer === "string" ? s.customer : s.customer?.id) || null
+        const subId =
+          (typeof s.subscription === "string" ? s.subscription : s.subscription?.id) || null
+
         let priceId: string | null = null
-        try {
-          const full = await stripe.checkout.sessions.retrieve(session.id, {
-            expand: ['line_items.data.price']
-          })
-          priceId = (full.line_items?.data?.[0]?.price?.id as string) || null
-        } catch {}
+        let interval: string | null = null
+        let status: string | null = null
+        let currentPeriodEnd: string | null = null
+        let plan: string | null = (s.metadata?.plan as string) || null
 
-        const plan = (session.metadata?.plan as string) || null
+        if (subId) {
+          // Narrow to Stripe.Subscription explicitly
+          const subResp = await stripe.subscriptions.retrieve(subId)
+          const sub = subResp as unknown as Stripe.Subscription
+
+          const item = sub.items.data[0]
+          priceId = item?.price?.id || null
+          interval = (item?.price?.recurring?.interval as string) || null
+          status = sub.status || null
+          currentPeriodEnd = sub.current_period_end
+            ? new Date(sub.current_period_end * 1000).toISOString()
+            : null
+
+          if (!plan) {
+            const lookup = item?.price?.lookup_key || ""
+            if (lookup.includes("bpro")) plan = "business_pro"
+            else if (lookup.includes("plus")) plan = "plus"
+          }
+          if (!plan && sub.metadata?.plan) plan = sub.metadata.plan as string
+        }
 
         if (userId && customerId) {
-          await upsertSub(userId, {
+          await upsertSub(supabase, userId, {
             stripe_customer_id: customerId,
-            stripe_subscription_id: subscriptionId || null,
+            stripe_subscription_id: subId,
             price_id: priceId,
-            plan
+            plan,
+            interval,
+            status,
+            current_period_end: currentPeriodEnd,
           })
         }
         break
       }
 
-      // Keep row in sync if subscription is changed later
-      case 'customer.subscription.created':
-      case 'customer.subscription.updated': {
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted": {
+        // Event object is a real Stripe.Subscription already
         const sub = event.data.object as Stripe.Subscription
-        const customerId = typeof sub.customer === 'string' ? sub.customer : (sub.customer as any)?.id
-        const userId =
-          (sub.metadata?.userId as string | undefined) || (customerId ? await userIdFromCustomer(customerId) : null)
 
-        const priceId = (sub.items?.data?.[0]?.price?.id as string) || null
-        const plan = (sub.metadata?.plan as string) || null
+        const customerId =
+          (typeof sub.customer === "string" ? sub.customer : sub.customer?.id) || null
+        const item = sub.items.data[0]
+        const priceId = item?.price?.id || null
+        const interval = (item?.price?.recurring?.interval as string) || null
+        const status = sub.status || null
+        const currentPeriodEnd = sub.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString()
+          : null
 
-        if (userId && customerId) {
-          await upsertSub(userId, {
+        let plan: string | null = (sub.metadata?.plan as string) || null
+        if (!plan) {
+          const lookup = item?.price?.lookup_key || ""
+          if (lookup.includes("bpro")) plan = "business_pro"
+          else if (lookup.includes("plus")) plan = "plus"
+        }
+
+        // Find user row via metadata or existing mapping
+        let userId = (sub.metadata?.userId as string) || null
+        if (!userId && customerId) {
+          const { data: existing } = await supabase
+            .from("user_subscriptions")
+            .select("user_id")
+            .eq("stripe_customer_id", customerId)
+            .maybeSingle()
+          userId = existing?.user_id ?? null
+        }
+
+        if (userId) {
+          await upsertSub(supabase, userId, {
             stripe_customer_id: customerId,
             stripe_subscription_id: sub.id,
             price_id: priceId,
-            plan
-          })
-        }
-        break
-      }
-
-      case 'customer.subscription.deleted': {
-        const sub = event.data.object as Stripe.Subscription
-        const customerId = typeof sub.customer === 'string' ? sub.customer : (sub.customer as any)?.id
-        const userId =
-          (sub.metadata?.userId as string | undefined) || (customerId ? await userIdFromCustomer(customerId) : null)
-
-        if (userId) {
-          await upsertSub(userId, {
-            stripe_subscription_id: null
+            plan,
+            interval,
+            status,
+            current_period_end: currentPeriodEnd,
           })
         }
         break
       }
 
       default:
-        // ignore other events
         break
     }
 
     return NextResponse.json({ received: true })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Webhook handler error' }, { status: 500 })
+    return NextResponse.json({ error: err.message || "Webhook handler error" }, { status: 500 })
   }
 }
