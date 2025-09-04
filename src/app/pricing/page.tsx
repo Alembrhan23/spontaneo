@@ -382,7 +382,7 @@ function BusinessSection({
         <PlanCard
           accent="from-blue-50 to-white"
           title="Business Pro"
-          price={annual ? '$1,499/year' : '$149/month'}
+          price={annual ? '$0/year' : '$0/month'}
           sub={annual ? 'Save ~16% with annual billing' : 'Monthly billing with no commitment'}
           highlight
           cta={
