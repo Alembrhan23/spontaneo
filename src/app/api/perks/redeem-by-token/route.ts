@@ -1,7 +1,7 @@
 // app/api/perks/redeem-by-token/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { createClient as createAdmin } from "@supabase/supabase-js"
-import { verifyStaffCookie, STAFF_COOKIE_NAME } from "@lib/staffSession"
+import { verifyStaffCookie, STAFF_COOKIE_NAME } from "@/lib/staffSession"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
