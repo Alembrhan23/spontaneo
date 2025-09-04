@@ -34,6 +34,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <Link className="border rounded px-3 py-1 text-sm" href="/admin/events/list">Manage Events</Link>
           <Link className="border rounded px-3 py-1 text-sm" href="/admin/partners">Partners</Link>
           <Link className="border rounded px-3 py-1 text-sm" href="/happening">Happening</Link>
+
+          {/* ✅ NEW Perks nav */}
+          <Link className="border rounded px-3 py-1 text-sm" href="/admin/perks/new">Add Perk</Link>
+          <Link className="border rounded px-3 py-1 text-sm" href="/admin/perks/list">Perks</Link>
         </nav>
       </header>
       {children}
