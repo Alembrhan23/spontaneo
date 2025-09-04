@@ -36,12 +36,12 @@ export default function PricingPage() {
   }, [])
 
   const pricePlus = annual
-    ? { label: '$0/yr', sub: '≈ $0/mo billed annually' }
-    : { label: '$0/mo', sub: 'billed monthly' }
+    ? { label: '$39.90/yr', sub: '≈ $3.33/mo billed annually' }
+    : { label: '$3.99/mo', sub: 'billed monthly' }
 
   const priceVenue = annual
-    ? { label: '$0/yr', sub: '≈ $0/mo billed annually' }
-    : { label: '$0/mo', sub: 'billed monthly' }
+    ? { label: '$1,499/yr', sub: '≈ $125/mo billed annually' }
+    : { label: '$149/mo', sub: 'billed monthly' }
 
   const hasBilling = !!(sub?.stripe_customer_id || sub?.stripe_subscription_id)
   const isPlus = sub?.plan === 'plus'
@@ -382,7 +382,7 @@ function BusinessSection({
         <PlanCard
           accent="from-blue-50 to-white"
           title="Business Pro"
-          price={annual ? '$0/year' : '$0/month'}
+          price={annual ? '$1,499/year' : '$149/month'}
           sub={annual ? 'Save ~16% with annual billing' : 'Monthly billing with no commitment'}
           highlight
           cta={
