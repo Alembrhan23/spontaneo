@@ -68,11 +68,12 @@ export default async function AdminPerksList({ searchParams }: { searchParams?: 
   const q = (typeof searchParams?.q === "string" ? searchParams?.q : "").trim().toLowerCase()
   const status = (typeof searchParams?.status === "string" ? searchParams?.status : "all") as "all" | "live" | "soon" | "soldout" | "ended" | "inactive"
   const neigh = (typeof searchParams?.neigh === "string" ? searchParams?.neigh : "all")
-  const sort = (typeof searchParams?.sort === "string" ? searchParams?.sort : "start") as "start" | "created" | "title"
+  // DEFAULT sort now = timeleft
+  const sort = (typeof searchParams?.sort === "string" ? searchParams?.sort : "timeleft") as "timeleft" | "start" | "created" | "title"
 
-  // Filter & sort server-side (in memory, small list)
+  // Filter server-side (in memory)
   const now = Date.now()
-  const rows = perks.filter(p => {
+  const filtered = perks.filter(p => {
     if (neigh !== "all" && (p.neighborhood || "").toLowerCase() !== neigh.toLowerCase()) return false
     if (q) {
       const blob = `${p.title} ${p.venue_name ?? ""} ${p.neighborhood ?? ""} ${p.sponsor_tag ?? ""}`.toLowerCase()
@@ -81,12 +82,39 @@ export default async function AdminPerksList({ searchParams }: { searchParams?: 
     const st = statusOf(p).key
     if (status !== "all" && st !== status) return false
     return true
-  }).sort((a, b) => {
+  })
+
+  // ---- Sorting
+  function sortTupleTimeLeft(p: PerkRow): [number, number] {
+    const st = statusOf(p).key
+    const start = p.start_at ? new Date(p.start_at).getTime() : Number.POSITIVE_INFINITY
+    const end = p.end_at ? new Date(p.end_at).getTime() : Number.POSITIVE_INFINITY
+    // bucket: 0 live, 1 soon/soldout, 2 others, 3 inactive, 4 ended (last)
+    const bucket =
+      st === "live" ? 0 :
+      (st === "soon" || st === "soldout") ? 1 :
+      st === "inactive" ? 3 :
+      st === "ended" ? 4 : 2
+    // value: time remaining (live -> until end; soon -> until start; others -> start)
+    const value =
+      st === "live" ? Math.max(0, end - now) :
+      (st === "soon" || st === "soldout") ? Math.max(0, start - now) :
+      start
+    return [bucket, value]
+  }
+
+  const rows = filtered.sort((a, b) => {
     if (sort === "title") return a.title.localeCompare(b.title)
     if (sort === "created") return b.id - a.id // proxy
-    const sa = a.start_at ? new Date(a.start_at).getTime() : (a.active ? now - 1 : now + 9e12)
-    const sb = b.start_at ? new Date(b.start_at).getTime() : (b.active ? now - 1 : now + 9e12)
-    return sa - sb
+    if (sort === "start") {
+      const sa = a.start_at ? new Date(a.start_at).getTime() : now + 9e12
+      const sb = b.start_at ? new Date(b.start_at).getTime() : now + 9e12
+      return sa - sb
+    }
+    // timeleft (default)
+    const [ba, va] = sortTupleTimeLeft(a)
+    const [bb, vb] = sortTupleTimeLeft(b)
+    return ba - bb || va - vb || a.id - b.id
   })
 
   const neighborhoods = Array.from(new Set(perks.map(p => p.neighborhood).filter(Boolean))) as string[]
@@ -144,7 +172,6 @@ export default async function AdminPerksList({ searchParams }: { searchParams?: 
             let j = {};
             try { j = await res.json() } catch {}
             if (!res.ok) { window.alert(j['error'] || 'Failed'); return; }
-            // If a new token was returned, show it & also copy to clipboard
             if (j['staff_unlock_token']) {
               const link = location.origin + '/api/perks/' + form.dataset.id + '/staff/unlock?t=' + j['staff_unlock_token'];
               await copyText(link);
@@ -189,6 +216,7 @@ export default async function AdminPerksList({ searchParams }: { searchParams?: 
           {neighborhoods.map(n => <option key={n} value={n as string}>{n}</option>)}
         </select>
         <select name="sort" defaultValue={sort} className="border rounded px-3 py-2 text-sm">
+          <option value="timeleft">Sort by time left</option>
           <option value="start">Sort by start</option>
           <option value="created">Sort by created</option>
           <option value="title">Sort by title</option>
@@ -222,8 +250,9 @@ export default async function AdminPerksList({ searchParams }: { searchParams?: 
               const max = p.max_claims || 0
               const pct = max ? Math.min(100, Math.round((claimed / max) * 100)) : 0
               const origin = typeof window === "undefined" ? "" : window.location.origin
-              const userLink = `${origin}/perks/${p.id}`
-              const staffLink = `${origin}/api/perks/${p.id}/staff/unlock?t=${p.staff_unlock_token ?? ""}`
+
+              const start = p.start_at ? new Date(p.start_at) : null
+              const end = p.end_at ? new Date(p.end_at) : null
 
               return (
                 <tr key={p.id} className="border-t align-top">
@@ -237,8 +266,8 @@ export default async function AdminPerksList({ searchParams }: { searchParams?: 
                     )}
                   </td>
 
-                  {/* Perk */}
-                  <td className="py-3 px-3">
+                  {/* Perk (give it room) */}
+                  <td className="py-3 px-3" style={{ minWidth: 280 }}>
                     <div className="font-medium">{p.title}</div>
                     <div className="text-xs text-gray-600">
                       {p.venue_name || "—"}{p.neighborhood ? ` • ${p.neighborhood}` : ""}
@@ -248,13 +277,20 @@ export default async function AdminPerksList({ searchParams }: { searchParams?: 
                     </Link>
                   </td>
 
-                  {/* Window */}
-                  <td className="py-3 px-3 whitespace-nowrap">
-                    {p.start_at ? new Date(p.start_at).toLocaleString() : "—"}
-                    {p.end_at ? ` – ${new Date(p.end_at).toLocaleTimeString()}` : ""}
+                  {/* Window — split onto two lines */}
+                  <td className="py-3 px-3 whitespace-normal leading-5">
+                    {start ? (
+                      <>
+                        <div>{start.toLocaleDateString()}</div>
+                        <div className="text-xs text-gray-600">
+                          {start.toLocaleTimeString()}
+                          {end ? ` – ${end.toLocaleTimeString()}` : ""}
+                        </div>
+                      </>
+                    ) : "—"}
                   </td>
 
-                  {/* Progress */}
+                  {/* Progress (counts line already separate) */}
                   <td className="py-3 px-3" style={{ minWidth: 180 }}>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${pct}%` }} />
@@ -278,17 +314,14 @@ export default async function AdminPerksList({ searchParams }: { searchParams?: 
                   {/* Actions */}
                   <td className="py-3 pr-4 pl-3">
                     <div className="flex flex-wrap gap-2">
-                      {/* Copy buttons use data-copy; script handles clipboard */}
                       <a href="#" data-copy={`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/perks/${p.id}`} data-msg="User link copied" className="border rounded px-2 py-1">Copy user link</a>
                       <a href="#" data-copy={`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/perks/${p.id}/staff/unlock?t=${p.staff_unlock_token ?? ""}`} data-msg="Staff unlock copied" className="border rounded px-2 py-1">Copy staff unlock</a>
 
-                      {/* Toggle Active (AJAX form posts JSON) */}
                       <form data-ajax data-id={p.id} action={`/api/admin/perks/${p.id}/active`} method="post" className="inline">
                         <input type="hidden" name="active" value={(!p.active).toString()} />
                         <button className="border rounded px-2 py-1" type="submit">{p.active ? "Deactivate" : "Activate"}</button>
                       </form>
 
-                      {/* Regenerate unlock token (AJAX) */}
                       <form data-ajax data-id={p.id} action={`/api/admin/perks/${p.id}/regenerate-unlock`} method="post" className="inline">
                         <button className="border rounded px-2 py-1" type="submit">Regenerate unlock</button>
                       </form>
