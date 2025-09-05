@@ -6,9 +6,68 @@ import SmoothHashScroll from '@/components/SmoothHashScroll'
 import AppNavGuard from '@/components/AppNavGuard'
 import BrandBar from '@/components/BrandBar' // ⬅️ add
 
+
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://nowio.app'),
+
+  applicationName: 'Nowio',
+  title: {
+    default: 'Nowio',
+    template: '%s • Nowio',
+  },
+
+  // 🔄 New brand description (no First Friday)
+  description:
+    'Nowio is a social platform for micro-plans — create or join quick activities, meet new people nearby, and unlock local perks.',
+
+  keywords: [
+    'Nowio',
+    'micro plans',
+    'meet people',
+    'things to do',
+    'events',
+    'perks',
+    'hangouts',
+    'activities',
+  ],
+
+  openGraph: {
+    siteName: 'Nowio',
+    title: 'Nowio',
+    description:
+      'Create or join micro-plans, meet new people, and unlock local perks.',
+    url: 'https://nowio.app',
+    type: 'website',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Nowio' }],
+  },
+
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Nowio',
+    description:
+      'Create or join micro-plans, meet new people, and unlock local perks.',
+    images: ['/og.png'],
+  },
+
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/icon-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icon-512.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png' }],
+  },
+
+  manifest: '/site.webmanifest',
+}
+
+
+
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = { title: 'Spontaneo', description: 'Spontaneous plans in Denver' }
+// export const metadata = { title: 'Nowio', description: 'Spontaneous plans in Denver' }
 // (Optional) switch to Nowio:
 // export const metadata = { title: 'Nowio', description: 'Have fun now, with real people.' }
 

@@ -1,7 +1,7 @@
+// app/auth/callback/page.tsx
 import { Suspense } from 'react'
 import CallbackClient from './CallbackClient'
 
-// These exports are allowed here because this is a Server file
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 

@@ -1,12 +1,10 @@
+// app/login/LoginClient.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { useAuth } from '@/lib/auth'
-import {
-  ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck, LogIn, UserPlus
-} from 'lucide-react'
 import Link from 'next/link'
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck, LogIn, UserPlus } from 'lucide-react'
 
 type Props = { next: string }
 
@@ -31,8 +29,6 @@ function sanitizeNext(n?: string | null) {
 }
 
 export default function LoginClient({ next }: Props) {
-  const { user, loading } = useAuth()
-
   const safeNext = useMemo(() => sanitizeNext(next), [next])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -40,31 +36,12 @@ export default function LoginClient({ next }: Props) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  // If already logged in (e.g., returned from OAuth), go to next.
+  // If already logged in, go to next
   useEffect(() => {
-    if (!loading && user) {
-      window.location.replace(safeNext)
-    }
-  }, [loading, user, safeNext])
-
-  // Also handle OAuth case: when auth state flips to SIGNED_IN, sync cookies then go
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.access_token && session.refresh_token) {
-        try {
-          await fetch('/auth/set', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              access_token: session.access_token,
-              refresh_token: session.refresh_token,
-            }),
-          })
-        } catch { /* ignore */ }
-        window.location.replace(safeNext)
-      }
-    })
-    return () => subscription.unsubscribe()
+    ;(async () => {
+      const { data } = await supabase.auth.getUser()
+      if (data.user) window.location.replace(safeNext)
+    })()
   }, [safeNext])
 
   async function onSubmit(e: React.FormEvent) {
@@ -79,7 +56,7 @@ export default function LoginClient({ next }: Props) {
       return
     }
 
-    // Bridge client session -> server cookies, then hard-navigate
+    // Bridge client session -> server cookies, then navigate
     const at = data.session?.access_token
     const rt = data.session?.refresh_token
     if (at && rt) {
@@ -89,7 +66,7 @@ export default function LoginClient({ next }: Props) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ access_token: at, refresh_token: rt }),
         })
-      } catch { /* ignore */ }
+      } catch {}
     }
 
     window.location.replace(safeNext)
@@ -98,16 +75,14 @@ export default function LoginClient({ next }: Props) {
   return (
     <div className="min-h-[calc(100vh-56px)] grid place-items-center bg-gradient-to-b from-indigo-50/60 via-white to-white">
       <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-6 px-4">
-        {/* Brand / value prop (left) */}
+        {/* Left: brand */}
         <div className="hidden md:block rounded-2xl border bg-white p-7 shadow-sm relative overflow-hidden">
           <div aria-hidden className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-indigo-300/30 blur-3xl" />
           <div className="flex items-center gap-2 text-sm text-indigo-700 font-semibold">
             <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600 text-white">⚡</span>
             Nowio
           </div>
-          <h1 className="mt-6 text-3xl font-extrabold text-zinc-900 leading-tight">
-            Welcome back.
-          </h1>
+          <h1 className="mt-6 text-3xl font-extrabold text-zinc-900 leading-tight">Welcome back.</h1>
           <p className="mt-2 text-zinc-600">
             Join or host micro-plans in minutes. Verified people, clear plans, fewer flakes.
           </p>
@@ -127,7 +102,7 @@ export default function LoginClient({ next }: Props) {
           </ul>
         </div>
 
-        {/* Sign-in card (right) */}
+        {/* Right: sign-in */}
         <div className="rounded-2xl border bg-white p-6 md:p-7 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="text-xl font-bold">Log in</div>
@@ -143,7 +118,7 @@ export default function LoginClient({ next }: Props) {
           </div>
 
           {err && (
-            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert" aria-live="polite">
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">
               {err}
             </div>
           )}
@@ -160,7 +135,7 @@ export default function LoginClient({ next }: Props) {
                   autoComplete="email"
                   required
                   disabled={busy}
-                  className="w-full rounded-xl border bg-white pl-10 pr-3 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500 disabled:bg-zinc-50"
+                  className="w-full rounded-xl border bg-white pl-10 pr-3 py-2.5 text-[15px] outline-none focus:border-indigo-500 disabled:bg-zinc-50"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -178,7 +153,7 @@ export default function LoginClient({ next }: Props) {
                   autoComplete="current-password"
                   required
                   disabled={busy}
-                  className="w-full rounded-xl border bg-white pl-10 pr-10 py-2.5 text-[15px] outline-none ring-0 focus:border-indigo-500 disabled:bg-zinc-50"
+                  className="w-full rounded-xl border bg-white pl-10 pr-10 py-2.5 text-[15px] outline-none focus:border-indigo-500 disabled:bg-zinc-50"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -197,9 +172,7 @@ export default function LoginClient({ next }: Props) {
 
             <div className="flex items-center justify-between">
               <div />
-              <Link href="/reset" className="text-sm text-indigo-700 hover:underline">
-                Forgot password?
-              </Link>
+              <Link href="/reset" className="text-sm text-indigo-700 hover:underline">Forgot password?</Link>
             </div>
 
             <button
@@ -224,20 +197,21 @@ export default function LoginClient({ next }: Props) {
             onClick={async () => {
               setErr(null); setBusy(true)
               try {
-                const redirectTo = `${baseUrl()}/auth/callback?next=${encodeURIComponent(safeNext)}`
+                // Save where to go after login (to avoid query on redirect_uri)
+                sessionStorage.setItem('oauth_next', safeNext)
+
+                // MUST exactly match Google Authorized redirect URI (no query)
+                const redirectTo = `${baseUrl()}/auth/callback`
+
                 const { error } = await supabase.auth.signInWithOAuth({
                   provider: 'google',
-                  options: {
-                    redirectTo,
-                    queryParams: { prompt: 'select_account' },
-                  },
+                  options: { redirectTo, queryParams: { prompt: 'select_account' } },
                 })
                 if (error) setErr(error.message)
               } catch (e: any) {
                 setErr(e?.message || 'Failed to start Google sign-in.')
               } finally {
-                // If OAuth succeeds, browser navigates away; we only clear busy if there was an error.
-                setBusy(false)
+                setBusy(false) // if success, page navigates away
               }
             }}
             disabled={busy}
