@@ -8,11 +8,13 @@ import AdminLink from '@/components/AdminLink'
 
 type Tab = { href: string; label: string }
 
+/** Tabs: added Perks + First Friday, removed Neighborhood */
 const TABS: Tab[] = [
-  { href: '/discover',     label: 'Discover' },
-  { href: '/happening',    label: 'Happening' },
-  { href: '/plans',        label: 'My Plans' },
-  { href: '/neighborhood', label: 'Neighborhood' },
+  { href: '/discover',      label: 'Discover' },
+  { href: '/happening',     label: 'Happening' },
+  { href: '/plans',         label: 'My Plans' },
+  { href: '/perks',         label: 'Perks' },
+  { href: '/first-friday',  label: 'First Friday' },
 ]
 
 export default function TopTabs() {
