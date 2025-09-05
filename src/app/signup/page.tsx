@@ -7,10 +7,11 @@ export const revalidate = 0
 export const fetchCache = 'force-no-store'
 export const runtime = 'nodejs'
 
-export const metadata = {
-  title: 'Spontaneo — Real people. Real plans. Right now.',
+import type { Metadata } from 'next'
+export const metadata: Metadata = {
+  title: 'Nowio — Create or join micro-plans',
   description:
-    'Tap to create or join casual micro-plans in Denver’s RiNo, LoHi, and Five Points. Join → chat → meet.',
+  'Nowio is a social platform for micro-plans — create or join quick activities, meet new people nearby, and unlock local perks.',
 }
 
 export default function Page() {

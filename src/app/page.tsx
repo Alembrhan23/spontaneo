@@ -1,35 +1,302 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
+/* --------------------------------- Types --------------------------------- */
+type Activity = {
+  emoji: string
+  title: string
+  time: string
+  location: string
+  attendees: number
+  status: 'Open' | 'Almost full'
+}
+
+/* ------------------------------ UI Components ---------------------------- */
+function ActivityCard({ a }: { a: Activity }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all duration-300 transform hover:-translate-y-0.5 sm:hover:-translate-y-1 w-[85vw] min-w-[85vw] xs:w-[300px] xs:min-w-[300px] sm:min-w-[340px] md:min-w-[360px] snap-start">
+      <div className="flex items-start justify-between mb-3 sm:mb-4">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-xl sm:text-2xl">
+          {a.emoji}
+        </div>
+        <span
+          className={`text-xs font-medium px-2 py-1 sm:px-3 sm:py-1.5 rounded-full ${
+            a.status === 'Open'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-amber-100 text-amber-800'
+          }`}
+        >
+          {a.status}
+        </span>
+      </div>
+
+      <h3 className="font-semibold text-gray-900 text-base sm:text-lg mb-2 sm:mb-3">{a.title}</h3>
+      
+      <div className="flex items-center text-sm text-gray-600 mb-1.5 sm:mb-2">
+        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span className="truncate">{a.time}</span>
+      </div>
+      
+      <div className="flex items-center text-sm text-gray-600 mb-3 sm:mb-4">
+        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <span className="truncate">{a.location}</span>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <div className="flex -space-x-2">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-indigo-200 to-purple-200 border-2 border-white shadow-sm"
+              />
+            ))}
+          </div>
+          <span className="text-xs sm:text-sm text-gray-600 ml-2 font-medium">{a.attendees} going</span>
+        </div>
+
+        <button className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs sm:text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 shadow-sm hover:shadow-md">
+          Join Now
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ActivityCarousel({ items }: { items: Activity[] }) {
+  const trackRef = useRef<HTMLDivElement | null>(null)
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(true)
+
+  const updateArrows = () => {
+    const el = trackRef.current
+    if (!el) return
+    const { scrollLeft, clientWidth, scrollWidth } = el
+    const slack = 8
+    setCanLeft(scrollLeft > slack)
+    setCanRight(scrollLeft + clientWidth < scrollWidth - slack)
+  }
+
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    updateArrows()
+    const onScroll = () => updateArrows()
+    const onResize = () => updateArrows()
+    el.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onResize)
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [])
+
+  // Make vertical wheel gestures scroll horizontally inside the carousel
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        el.scrollBy({ left: e.deltaY, behavior: 'smooth' })
+        e.preventDefault()
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const step = () => {
+    const el = trackRef.current
+    if (!el) return 300
+    // Responsive step based on screen size
+    if (window.innerWidth < 640) return Math.floor(el.clientWidth * 0.85)
+    if (window.innerWidth < 768) return Math.floor(el.clientWidth * 0.6)
+    return Math.floor(el.clientWidth * 0.45)
+  }
+
+  const go = (dir: -1 | 1) => {
+    const el = trackRef.current
+    if (!el) return
+    el.scrollBy({ left: dir * step(), behavior: 'smooth' })
+  }
+
+  const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowLeft') go(-1)
+    if (e.key === 'ArrowRight') go(1)
+  }
+
+  return (
+    <div className="relative">
+      {/* Hide scrollbar but maintain functionality */}
+      <style jsx>{`
+        .hide-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
+
+      {/* subtle fade edges - hide on mobile */}
+      <div className="pointer-events-none absolute left-0 top-0 h-full w-4 sm:w-8 bg-gradient-to-r from-white to-transparent z-10 hidden xs:block" />
+      <div className="pointer-events-none absolute right-0 top-0 h-full w-4 sm:w-8 bg-gradient-to-l from-white to-transparent z-10 hidden xs:block" />
+
+      <div
+        ref={trackRef}
+        tabIndex={0}
+        onKeyDown={onKey}
+        className="flex gap-4 overflow-x-auto hide-scrollbar scroll-smooth snap-x snap-mandatory py-2 px-4 sm:px-1 focus:outline-none"
+        aria-label="Activities carousel"
+      >
+        {items.map((a, i) => (
+          <ActivityCard key={`${a.title}-${i}`} a={a} />
+        ))}
+        <div className="shrink-0 w-2" />
+      </div>
+
+      {/* Desktop arrows with careful styling */}
+      <button
+        type="button"
+        onClick={() => go(-1)}
+        disabled={!canLeft}
+        aria-label="Previous activity"
+        className={`absolute -left-2 sm:-left-4 top-1/2 -translate-y-1/2 hidden sm:flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white/95 backdrop-blur-sm shadow-md transition-all duration-300 hover:shadow-lg hover:scale-105
+        ${canLeft ? 'opacity-100 cursor-pointer' : 'opacity-0 pointer-events-none'}`}
+        style={{ 
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+          transition: 'opacity 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease'
+        }}
+      >
+        <svg 
+          viewBox="0 0 24 24" 
+          className="h-5 w-5 text-gray-700" 
+          fill="none" 
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => go(1)}
+        disabled={!canRight}
+        aria-label="Next activity"
+        className={`absolute -right-2 sm:-right-4 top-1/2 -translate-y-1/2 hidden sm:flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white/95 backdrop-blur-sm shadow-md transition-all duration-300 hover:shadow-lg hover:scale-105
+        ${canRight ? 'opacity-100 cursor-pointer' : 'opacity-0 pointer-events-none'}`}
+        style={{ 
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+          transition: 'opacity 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease'
+        }}
+      >
+        <svg 
+          viewBox="0 0 24 24" 
+          className="h-5 w-5 text-gray-700" 
+          fill="none" 
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      {/* Mobile arrows (smaller and positioned differently) */}
+      <button
+        type="button"
+        onClick={() => go(-1)}
+        disabled={!canLeft}
+        aria-label="Previous activity"
+        className={`absolute left-2 top-1/2 -translate-y-1/2 sm:hidden flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white/95 backdrop-blur-sm shadow-md transition-all duration-300
+        ${canLeft ? 'opacity-100 cursor-pointer' : 'opacity-0 pointer-events-none'}`}
+        style={{ 
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          transition: 'opacity 0.3s ease'
+        }}
+      >
+        <svg 
+          viewBox="0 0 24 24" 
+          className="h-4 w-4 text-gray-700" 
+          fill="none" 
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => go(1)}
+        disabled={!canRight}
+        aria-label="Next activity"
+        className={`absolute right-2 top-1/2 -translate-y-1/2 sm:hidden flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white/95 backdrop-blur-sm shadow-md transition-all duration-300
+        ${canRight ? 'opacity-100 cursor-pointer' : 'opacity-0 pointer-events-none'}`}
+        style={{ 
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          transition: 'opacity 0.3s ease'
+        }}
+      >
+        <svg 
+          viewBox="0 0 24 24" 
+          className="h-4 w-4 text-gray-700" 
+          fill="none" 
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      {/* Mobile indicators for better UX */}
+      <div className="flex justify-center mt-4 sm:hidden">
+        <div className="flex space-x-1.5">
+          {items.slice(0, 4).map((_, i) => (
+            <div 
+              key={i}
+              className="w-1.5 h-1.5 rounded-full bg-gray-300"
+              aria-hidden="true"
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* --------------------------------- Page ---------------------------------- */
 export default function Home() {
   const router = useRouter()
 
-  // Block rendering until we know auth state to prevent header “double” flash
+  // avoid header flicker: block render until auth checked
   const [checkingAuth, setCheckingAuth] = useState(true)
   useEffect(() => {
     ;(async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         router.replace('/discover')
-        return // do not render this page at all
+        return
       }
       setCheckingAuth(false)
     })()
   }, [router])
 
-  // 🔽 NEW: mobile menu state + small helpers
+  // mobile menu state + helpers
   const [mobileOpen, setMobileOpen] = useState(false)
-  // lock body scroll when menu is open
   useEffect(() => {
-    if (mobileOpen) document.body.style.overflow = 'hidden'
-    else document.body.style.overflow = ''
+    document.body.style.overflow = mobileOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [mobileOpen])
-  // close on Esc
   useEffect(() => {
     if (!mobileOpen) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false) }
@@ -37,12 +304,10 @@ export default function Home() {
     return () => window.removeEventListener('keydown', onKey)
   }, [mobileOpen])
 
-  // Smooth scroll implementation
+  // Smooth in-page anchor scrolling
   useEffect(() => {
     const header = () => document.querySelector('header') as HTMLElement | null
-    const headerOffset = () =>
-      (header()?.getBoundingClientRect().height ?? 80) + 16 // header + breathing room
-
+    const headerOffset = () => (header()?.getBoundingClientRect().height ?? 80) + 16
     const scrollToHash = (hash: string, smooth = true) => {
       const id = decodeURIComponent(hash.replace('#', ''))
       const el = document.getElementById(id)
@@ -50,106 +315,50 @@ export default function Home() {
       const top = el.getBoundingClientRect().top + window.scrollY - headerOffset()
       window.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' })
     }
-
     const onClick = (e: MouseEvent) => {
-      const a = (e.target as HTMLElement).closest('a[href^="#"]') as
-        | HTMLAnchorElement
-        | null
+      const a = (e.target as HTMLElement).closest('a[href^="#"]') as HTMLAnchorElement | null
       if (!a || !a.hash || a.hash === '#') return
       if (!document.getElementById(a.hash.slice(1))) return
       e.preventDefault()
       scrollToHash(a.hash, true)
       history.pushState(null, '', a.hash)
-      // if we navigated from the mobile panel, close it
       setMobileOpen(false)
     }
-
     document.addEventListener('click', onClick)
-
-    // Correct initial position when landing at /#section
     if (location.hash) requestAnimationFrame(() => scrollToHash(location.hash, false))
-
     return () => document.removeEventListener('click', onClick)
   }, [])
 
-  // While checking auth (or redirecting), render nothing to avoid flicker
   if (checkingAuth) return null
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-white">
-      {/* Background elements */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-white via-indigo-50/20 to-amber-50/20"
-      />
-      {/* keep these non-interactive so they don't block taps */}
-      <div
-        className="pointer-events-none absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50 -z-10"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-96 h-96 bg-amber-100 rounded-full blur-3xl opacity-40 -z-10"
-        aria-hidden
-      />
+      {/* Background */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-white via-indigo-50/20 to-amber-50/20" />
+      <div aria-hidden className="pointer-events-none absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-64 h-64 sm:w-96 sm:h-96 bg-indigo-100 rounded-full blur-3xl opacity-50 -z-10" />
+      <div aria-hidden className="pointer-events-none absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-64 h-64 sm:w-96 sm:h-96 bg-amber-100 rounded-full blur-3xl opacity-40 -z-10" />
 
-      {/* ===================== Header (desktop + mobile hamburger) ===================== */}
+      {/* ===================== Header ===================== */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-5 py-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            {/* Brand */}
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-indigo-600 to-amber-500 flex items-center justify-center text-white font-bold">
-                N
-              </div>
-              <span className="text-xl font-bold text-gray-900">Nowio</span>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-r from-indigo-600 to-amber-500 flex items-center justify-center text-white font-bold text-sm sm:text-base">N</div>
+              <span className="text-lg sm:text-xl font-bold text-gray-900">Nowio</span>
             </Link>
 
-            {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-6">
-              <a
-                href="#activities"
-                className="text-gray-700 hover:text-indigo-600 transition-colors font-medium"
-              >
-                Activities
-              </a>
-              <a
-                href="#how"
-                className="text-gray-700 hover:text-indigo-600 transition-colors font-medium"
-              >
-                How It Works
-              </a>
-              <a
-                href="#niches"
-                className="text-gray-700 hover:text-indigo-600 transition-colors font-medium"
-              >
-                Popular Categories
-              </a>
-              {/* NEW: Pricing on desktop */}
-              <Link
-                href="/pricing"
-                className="text-gray-700 hover:text-indigo-600 transition-colors font-medium"
-              >
-                Pricing
-              </Link>
+              <a href="#activities" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Activities</a>
+              <a href="#how" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">How It Works</a>
+              <a href="#niches" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Popular Categories</a>
+              <Link href="/pricing" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Pricing</Link>
             </nav>
 
-            {/* Desktop CTAs */}
             <div className="hidden md:flex items-center gap-3">
-              <Link
-                href="/login"
-                className="px-4 py-2 text-gray-700 hover:text-indigo-600 font-medium transition-colors"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/signup"
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-              >
-                Get Started
-              </Link>
+              <Link href="/login" className="px-4 py-2 text-gray-700 hover:text-indigo-600 font-medium transition-colors">Sign In</Link>
+              <Link href="/signup" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">Get Started</Link>
             </div>
 
-            {/* Mobile hamburger */}
             <button
               type="button"
               onClick={() => setMobileOpen(v => !v)}
@@ -158,12 +367,10 @@ export default function Home() {
               className="md:hidden inline-flex items-center justify-center rounded-lg p-2 border border-gray-300 text-gray-700 hover:bg-gray-50"
             >
               {mobileOpen ? (
-                // Close icon
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
               ) : (
-                // Hamburger icon
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/>
                 </svg>
@@ -172,79 +379,27 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Mobile overlay + panel */}
+        {/* Mobile menu */}
         <div className={`${mobileOpen ? 'pointer-events-auto' : 'pointer-events-none'} md:hidden`}>
-          {/* Backdrop */}
-          <div
-            onClick={() => setMobileOpen(false)}
-            className={`fixed inset-0 bg-black/20 transition-opacity ${mobileOpen ? 'opacity-100' : 'opacity-0'}`}
-            aria-hidden="true"
-          />
-          {/* Panel */}
-          <div
-            id="mobile-menu"
-            className={`absolute inset-x-0 top-full origin-top bg-white shadow-lg border-t border-gray-100 transition transform ${
-              mobileOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
-            }`}
-          >
+          <div onClick={() => setMobileOpen(false)} className={`fixed inset-0 bg-black/20 transition-opacity ${mobileOpen ? 'opacity-100' : 'opacity-0'}`} aria-hidden="true" />
+          <div id="mobile-menu" className={`absolute inset-x-0 top-full origin-top bg-white shadow-lg border-t border-gray-100 transition transform ${mobileOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
             <nav className="px-4 py-3">
-              <a
-                href="#activities"
-                onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
-              >
-                Activities
-              </a>
-              <a
-                href="#how"
-                onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
-              >
-                How It Works
-              </a>
-              <a
-                href="#niches"
-                onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
-              >
-                Popular Categories
-              </a>
-              <Link
-                href="/pricing"
-                onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
-              >
-                Pricing
-              </Link>
-
+              <a href="#activities" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Activities</a>
+              <a href="#how" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">How It Works</a>
+              <a href="#niches" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Popular Categories</a>
+              <Link href="/pricing" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Pricing</Link>
               <div className="my-2 border-t border-gray-100" />
-
-              <Link
-                href="/login"
-                onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/signup"
-                onClick={() => setMobileOpen(false)}
-                className="mt-1 block w-full text-center px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium"
-              >
-                Get Started
-              </Link>
+              <Link href="/login" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Sign In</Link>
+              <Link href="/signup" onClick={() => setMobileOpen(false)} className="mt-1 block w-full text-center px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium">Get Started</Link>
             </nav>
           </div>
         </div>
       </header>
 
-      {/* =========================== Hero Section ============================ */}
-      <section
-        id="hero"
-        className="relative mx-auto max-w-6xl px-5 pt-16 sm:pt-20 pb-10 text-center"
-      >
+      {/* =========================== Hero ============================ */}
+      <section id="hero" className="relative mx-auto max-w-6xl px-4 sm:px-5 pt-12 sm:pt-16 md:pt-20 pb-8 sm:pb-10 text-center">
         <div className="max-w-3xl mx-auto">
-          <p className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/90 px-4 py-1.5 text-sm font-medium text-indigo-700 shadow-sm backdrop-blur-sm">
+          <p className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/90 px-3 py-1 text-xs sm:text-sm font-medium text-indigo-700 shadow-sm backdrop-blur-sm">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
@@ -252,76 +407,53 @@ export default function Home() {
             Denver Beta • RiNo • LoHi • Five Points
           </p>
 
-          <h1 className="mt-8 text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-gray-900">
+          <h1 className="mt-6 sm:mt-8 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900">
             <span className="block">Find activities.</span>
-            <span className="block mt-3 text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-amber-500">
+            <span className="block mt-2 sm:mt-3 text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-amber-500">
               Meet your people.
             </span>
           </h1>
 
-          <p className="mt-6 text-xl leading-8 text-gray-600">
+          <p className="mt-4 sm:mt-6 text-lg sm:text-xl leading-7 sm:leading-8 text-gray-600">
             Discover what's happening right now in your neighborhood and connect with others who share your interests.
           </p>
 
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link
-              href="/signup"
-              className="relative inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-white transition-all duration-300 bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-xl hover:from-indigo-700 hover:to-indigo-800 hover:shadow-xl hover:-translate-y-0.5 sm:px-8 sm:py-4 sm:text-lg"
-            >
+          <div className="mt-8 sm:mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            <Link href="/signup" className="relative inline-flex items-center justify-center px-5 py-2.5 sm:px-6 sm:py-3.5 text-sm sm:text-base font-semibold text-white transition-all duration-300 bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-xl hover:from-indigo-700 hover:to-indigo-800 hover:shadow-xl hover:-translate-y-0.5">
               Start Exploring
             </Link>
-            <Link
-              href="/login"
-              className="relative inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-gray-900 transition-all duration-300 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:shadow-md sm:px-8 sm:py-4 sm:text-lg"
-            >
+            <Link href="/login" className="relative inline-flex items-center justify-center px-5 py-2.5 sm:px-6 sm:py-3.5 text-sm sm:text-base font-semibold text-gray-900 transition-all duration-300 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:shadow-md">
               Browse Activities
             </Link>
           </div>
         </div>
 
-        {/* Activity Showcase - Responsive grid */}
-        <div className="mt-16 max-w-5xl mx-auto">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-100 p-6 shadow-xl md:p-8">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              {/* Host Card */}
-              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-6 rounded-xl border border-indigo-100">
-                <div className="w-12 h-12 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xl mb-4">
-                  🎯
-                </div>
-                <h3 className="font-semibold text-lg text-gray-900 mb-2">Host an Activity</h3>
-                <p className="text-gray-700 text-sm mb-4">Create your own plan and invite others to join</p>
-                <button className="text-indigo-700 text-sm font-medium flex items-center">
-                  Create a plan <span className="ml-1">→</span>
-                </button>
+        {/* Showcase tiles */}
+        <div className="mt-12 sm:mt-16 max-w-5xl mx-auto">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-100 p-4 sm:p-6 md:p-8 shadow-xl">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-3">
+              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-4 sm:p-6 rounded-xl border border-indigo-100">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-lg sm:text-xl mb-3 sm:mb-4">🎯</div>
+                <h3 className="font-semibold text-base sm:text-lg text-gray-900 mb-2">Host an Activity</h3>
+                <p className="text-gray-700 text-xs sm:text-sm mb-3 sm:mb-4">Create your own plan and invite others to join</p>
+                <button className="text-indigo-700 text-xs sm:text-sm font-medium flex items-center">Create a plan <span className="ml-1">→</span></button>
               </div>
-
-              {/* Join Card */}
-              <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-6 rounded-xl border border-amber-100">
-                <div className="w-12 h-12 rounded-lg bg-amber-600 flex items-center justify-center text-white text-xl mb-4">
-                  👥
-                </div>
-                <h3 className="font-semibold text-lg text-gray-900 mb-2">Join Others</h3>
-                <p className="text-gray-700 text-sm mb-4">Find activities that match your interests</p>
-                <button className="text-amber-700 text-sm font-medium flex items-center">
-                  Explore activities <span className="ml-1">→</span>
-                </button>
+              <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 sm:p-6 rounded-xl border border-amber-100">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-amber-600 flex items-center justify-center text-white text-lg sm:text-xl mb-3 sm:mb-4">👥</div>
+                <h3 className="font-semibold text-base sm:text-lg text-gray-900 mb-2">Join Others</h3>
+                <p className="text-gray-700 text-xs sm:text-sm mb-3 sm:mb-4">Find activities that match your interests</p>
+                <button className="text-amber-700 text-xs sm:text-sm font-medium flex items-center">Explore activities <span className="ml-1">→</span></button>
               </div>
-
-              {/* Experience Card */}
-              <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl border border-green-100">
-                <div className="w-12 h-12 rounded-lg bg-green-600 flex items-center justify-center text-white text-xl mb-4">
-                  ✨
-                </div>
-                <h3 className="font-semibold text-lg text-gray-900 mb-2">Share Experiences</h3>
-                <p className="text-gray-700 text-sm mb-4">Create memories with new people</p>
-                <button className="text-green-700 text-sm font-medium flex items-center">
-                  See experiences <span className="ml-1">→</span>
-                </button>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 sm:p-6 rounded-xl border border-green-100">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-green-600 flex items-center justify-center text-white text-lg sm:text-xl mb-3 sm:mb-4">✨</div>
+                <h3 className="font-semibold text-base sm:text-lg text-gray-900 mb-2">Share Experiences</h3>
+                <p className="text-gray-700 text-xs sm:text-sm mb-3 sm:mb-4">Create memories with new people</p>
+                <button className="text-green-700 text-xs sm:text-sm font-medium flex items-center">See experiences <span className="ml-1">→</span></button>
               </div>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-gray-100">
-              <div className="flex flex-wrap justify-center gap-4">
+            <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-100">
+              <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
                 {[
                   { emoji: '☕', label: 'Coffee' },
                   { emoji: '🏓', label: 'Pickleball' },
@@ -330,10 +462,7 @@ export default function Home() {
                   { emoji: '🚶', label: 'Urban Hikes' },
                   { emoji: '🎲', label: 'Game Nights' },
                 ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm"
-                  >
+                  <div key={item.label} className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs sm:text-sm">
                     <span>{item.emoji}</span>
                     <span className="font-medium text-gray-700">{item.label}</span>
                   </div>
@@ -344,80 +473,34 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===================== Activity Browser ===================== */}
-      <section id="activities" className="py-16 bg-white sm:py-20">
-        <div className="max-w-6xl mx-auto px-5">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+      {/* ===================== Activity Browser (Carousel) ===================== */}
+      <section id="activities" className="py-12 sm:py-16 md:py-20 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5">
+          <div className="text-center mb-8 sm:mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
               What's happening near you
             </h2>
-            <p className="mt-4 text-lg text-gray-600 max-w-3xl mx-auto sm:text-xl">
+            <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
               Explore activities you can join right now in Denver neighborhoods
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              { emoji: '☕', title: 'Coffee & Cowork', time: 'Today • 10:00 AM', location: 'Thump Coffee • RiNo', attendees: 4, status: 'Open' },
-              { emoji: '🏓', title: 'Pickleball Social', time: 'Today • 5:30 PM', location: 'Central Park Courts', attendees: 6, status: 'Almost full' },
-              { emoji: '🍻', title: 'Brewery Hangout', time: 'Tomorrow • 7:00 PM', location: 'Ratio Beerworks', attendees: 3, status: 'Open' },
-              { emoji: '🎨', title: 'First Friday Art Walk', time: 'Fri • 6:00 PM', location: 'Santa Fe Arts District', attendees: 8, status: 'Open' },
-              { emoji: '🚶', title: 'City Park Walk', time: 'Sat • 9:00 AM', location: 'City Park • Five Points', attendees: 5, status: 'Open' },
-              { emoji: '🎲', title: 'Board Game Night', time: 'Sat • 6:30 PM', location: 'The Wizards Chest', attendees: 7, status: 'Almost full' },
-            ].map((activity, index) => (
-              <div
-                key={index}
-                className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center text-xl">
-                    {activity.emoji}
-                  </div>
-                  <span
-                    className={`text-xs font-medium px-2 py-1 rounded-full ${
-                      activity.status === 'Open'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
-                    {activity.status}
-                  </span>
-                </div>
+          {/* One-row interactive carousel */}
+          <ActivityCarousel
+            items={[
+              { emoji: '☕', title: 'Coffee & Cowork',   time: 'Today • 10:00 AM',  location: 'Thump Coffee • RiNo',        attendees: 4, status: 'Open' },
+              { emoji: '🏓', title: 'Pickleball Social', time: 'Today • 5:30 PM',   location: 'Central Park Courts',        attendees: 6, status: 'Almost full' },
+              { emoji: '🍻', title: 'Brewery Hangout',   time: 'Tomorrow • 7:00 PM', location: 'Ratio Beerworks',            attendees: 3, status: 'Open' },
+              { emoji: '🎨', title: 'Art Walk Meetup',   time: 'Fri • 6:00 PM',     location: 'Santa Fe Arts District',     attendees: 8, status: 'Open' },
+              { emoji: '🚶', title: 'City Park Walk',    time: 'Sat • 9:00 AM',     location: 'City Park • Five Points',    attendees: 5, status: 'Open' },
+              { emoji: '🎲', title: 'Board Game Night',  time: 'Sat • 6:30 PM',     location: 'The Wizards Chest',          attendees: 7, status: 'Almost full' },
+            ]}
+          />
 
-                <h3 className="font-semibold text-gray-900 mb-2">{activity.title}</h3>
-                <p className="text-sm text-gray-600 mb-1">{activity.time}</p>
-                <p className="text-sm text-gray-600 mb-4">{activity.location}</p>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className="flex -space-x-2">
-                      {[1, 2, 3].map((i) => (
-                        <div
-                          key={i}
-                          className="w-6 h-6 rounded-full bg-gray-300 border-2 border-white"
-                        />
-                      ))}
-                    </div>
-                    <span className="text-xs text-gray-500 ml-2">
-                      +{activity.attendees} going
-                    </span>
-                  </div>
-
-                  <button className="text-xs font-medium text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
-                    Join
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-10 text-center">
-            <Link
-              href="/login"
-              className="inline-flex items-center text-indigo-600 hover:text-indigo-700 font-medium"
-            >
+          <div className="mt-8 sm:mt-10 text-center">
+            <Link href="/login" className="inline-flex items-center text-indigo-600 hover:text-indigo-700 font-medium text-sm sm:text-base">
               See all activities
-              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
               </svg>
             </Link>
@@ -426,65 +509,46 @@ export default function Home() {
       </section>
 
       {/* ===================== How It Works ===================== */}
-      <section id="how" className="py-16 bg-gradient-to-b from-white to-gray-50 sm:py-20">
-        <div className="max-w-6xl mx-auto px-5">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+      <section id="how" className="py-12 sm:py-16 md:py-20 bg-gradient-to-b from-white to-gray-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5">
+          <div className="text-center mb-8 sm:mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
               Plan → Chat → Meet & Experience
             </h2>
-            <p className="mt-4 text-lg text-gray-600 max-w-3xl mx-auto sm:text-xl">
+            <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
               Our simple process helps you find activities and connect with people who share your interests
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-3">
             <div className="text-center">
-              <div className="mx-auto w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-2xl mb-6">
-                1
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">Plan or Find</h3>
-              <p className="text-gray-600">
-                Create your own activity or browse existing plans in your neighborhood. Set clear details about what,
-                when, and where.
-              </p>
+              <div className="mx-auto w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xl sm:text-2xl mb-4 sm:mb-6">1</div>
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">Plan or Find</h3>
+              <p className="text-gray-600 text-sm sm:text-base">Create your own activity or browse existing plans in your neighborhood. Set clear details about what, when, and where.</p>
             </div>
-
             <div className="text-center">
-              <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-2xl mb-6">
-                2
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">Chat & Connect</h3>
-              <p className="text-gray-600">
-                Once you join or host, chat with attendees to coordinate details, ask questions, and get to know each
-                other.
-              </p>
+              <div className="mx-auto w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-xl sm:text-2xl mb-4 sm:mb-6">2</div>
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">Chat & Connect</h3>
+              <p className="text-gray-600 text-sm sm:text-base">Once you join or host, chat with attendees to coordinate details, ask questions, and get to know each other.</p>
             </div>
-
             <div className="text-center">
-              <div className="mx-auto w-16 h-16 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-2xl mb-6">
-                3
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">Meet & Experience</h3>
-              <p className="text-gray-600">
-                Show up and enjoy the activity together. Create memories and build connections through shared
-                experiences.
-              </p>
+              <div className="mx-auto w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xl sm:text-2xl mb-4 sm:mb-6">3</div>
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">Meet & Experience</h3>
+              <p className="text-gray-600 text-sm sm:text-base">Show up and enjoy the activity together. Create memories and build connections through shared experiences.</p>
             </div>
           </div>
         </div>
       </section>
 
       {/* ===================== Popular Categories ===================== */}
-      <section id="niches" className="py-16 bg-white sm:py-20">
-        <div className="max-w-6xl mx-auto px-5">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Popular Categories</h2>
-            <p className="mt-4 text-lg text-gray-600 max-w-3xl mx-auto sm:text-xl">
-              Explore activities by category to find what interests you most
-            </p>
+      <section id="niches" className="py-12 sm:py-16 md:py-20 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5">
+          <div className="text-center mb-8 sm:mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">Popular Categories</h2>
+            <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">Explore activities by category to find what interests you most</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {[
               { emoji: '☕', label: 'Coffee' },
               { emoji: '🏓', label: 'Pickleball' },
@@ -499,23 +563,17 @@ export default function Home() {
               { emoji: '🚴', label: 'Cycling' },
               { emoji: '🎥', label: 'Film' },
             ].map((item, index) => (
-              <div
-                key={index}
-                className="flex flex-col items-center p-4 bg-gray-50 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer"
-              >
-                <div className="text-2xl mb-2">{item.emoji}</div>
-                <span className="text-sm font-medium text-gray-700 text-center">{item.label}</span>
+              <div key={index} className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer">
+                <div className="text-xl sm:text-2xl mb-1.5 sm:mb-2">{item.emoji}</div>
+                <span className="text-xs sm:text-sm font-medium text-gray-700 text-center">{item.label}</span>
               </div>
             ))}
           </div>
 
-          <div className="mt-10 text-center">
-            <Link
-              href="/login"
-              className="inline-flex items-center text-indigo-600 hover:text-indigo-700 font-medium"
-            >
+          <div className="mt-8 sm:mt-10 text-center">
+            <Link href="/login" className="inline-flex items-center text-indigo-600 hover:text-indigo-700 font-medium text-sm sm:text-base">
               Explore all categories
-              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
               </svg>
             </Link>
@@ -524,97 +582,75 @@ export default function Home() {
       </section>
 
       {/* ===================== Hosting Section ===================== */}
-      <section className="py-16 bg-gradient-to-b from-gray-50 to-white sm:py-20">
-        <div className="max-w-6xl mx-auto px-5">
-          <div className="grid grid-cols-1 gap-10 md:grid-cols-2 items-center">
+      <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-b from-gray-50 to-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 items-center">
             <div>
-              <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
                 Can't find what you're looking for?
               </h2>
-              <p className="mt-4 text-lg text-gray-600 sm:text-xl">
+              <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600">
                 Host your own activity and invite others to join. Whether it's a coffee meetup, hiking group, or game
                 night - create the experience you want to have.
               </p>
 
-              <div className="mt-8 space-y-4">
-                <div className="flex items-center">
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-3">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
+              <div className="mt-6 sm:mt-8 space-y-3 sm:space-y-4">
+                {[
+                  'Set your own time and location',
+                  'Define the activity details',
+                  'Invite others to join you',
+                ].map((t) => (
+                  <div key={t} className="flex items-center">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs sm:text-sm mr-2 sm:mr-3">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className="text-sm sm:text-base text-gray-700">{t}</span>
                   </div>
-                  <span className="text-gray-700">Set your own time and location</span>
-                </div>
-
-                <div className="flex items-center">
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-3">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <span className="text-gray-700">Define the activity details</span>
-                </div>
-
-                <div className="flex items-center">
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-3">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <span className="text-gray-700">Invite others to join you</span>
-                </div>
+                ))}
               </div>
 
-              <div className="mt-8">
-                <Link
-                  href="/signup"
-                  className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-                >
+              <div className="mt-6 sm:mt-8">
+                <Link href="/signup" className="inline-flex items-center px-5 py-2.5 sm:px-6 sm:py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors text-sm sm:text-base">
                   Create your activity
                 </Link>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-              <div className="bg-indigo-50 p-4 rounded-lg mb-6">
-                <h3 className="font-semibold text-indigo-900 mb-2">Activity Idea: Coffee & Cowork</h3>
-                <p className="text-sm text-indigo-700">
-                  Bring your laptop and join others for focused work sessions with coffee breaks
-                </p>
+            <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200 shadow-sm">
+              <div className="bg-indigo-50 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6">
+                <h3 className="font-semibold text-indigo-900 text-sm sm:text-base mb-1.5">Activity Idea: Coffee & Cowork</h3>
+                <p className="text-indigo-700 text-xs sm:text-sm">Bring your laptop and join others for focused work sessions with coffee breaks</p>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Activity Type</label>
-                  <div className="flex flex-wrap gap-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Activity Type</label>
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {['☕ Coffee', '💻 Coworking', '📚 Study Group'].map((tag) => (
-                      <span key={tag} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
-                        {tag}
-                      </span>
+                      <span key={tag} className="px-2 py-0.5 sm:px-3 sm:py-1 bg-gray-100 text-gray-700 rounded-full text-xs sm:text-sm">{tag}</span>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <p className="text-sm text-gray-600">
-                    Casual coworking session at Thump Coffee. Bring your laptop, we'll take coffee breaks together.
-                  </p>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <p className="text-xs sm:text-sm text-gray-600">Casual coworking session at Thump Coffee. Bring your laptop, we'll take coffee breaks together.</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">When</label>
-                    <p className="text-sm text-gray-600">Tomorrow, 10AM</p>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">When</label>
+                    <p className="text-xs sm:text-sm text-gray-600">Tomorrow, 10AM</p>
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Where</label>
-                    <p className="text-sm text-gray-600">Thump Coffee, RiNo</p>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Where</label>
+                    <p className="text-xs sm:text-sm text-gray-600">Thump Coffee, RiNo</p>
                   </div>
                 </div>
 
-                <button className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+                <button className="w-full bg-indigo-600 text-white py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-indigo-700 transition-colors">
                   Create This Activity
                 </button>
               </div>
@@ -624,25 +660,19 @@ export default function Home() {
       </section>
 
       {/* ===================== Final CTA ===================== */}
-      <section className="py-16 bg-white sm:py-20">
-        <div className="max-w-4xl mx-auto px-5 text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+      <section className="py-12 sm:py-16 md:py-20 bg-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-5 text-center">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
             Ready to find your next activity?
           </h2>
-          <p className="mt-4 text-lg text-gray-600 sm:text-xl">
+          <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600">
             Join the Denver community and discover what's happening right now.
           </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 sm:mt-10">
-            <Link
-              href="/signup"
-              className="relative inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-white transition-all duration-300 bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-xl hover:from-indigo-700 hover:to-indigo-800 hover:shadow-xl hover:-translate-y-0.5 sm:px-8 sm:py-4 sm:text-lg"
-            >
+          <div className="mt-6 sm:mt-8 md:mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            <Link href="/signup" className="relative inline-flex items-center justify-center px-5 py-2.5 sm:px-6 sm:py-3.5 text-sm sm:text-base font-semibold text-white transition-all duration-300 bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-xl hover:from-indigo-700 hover:to-indigo-800 hover:shadow-xl hover:-translate-y-0.5">
               Get Started
             </Link>
-            <Link
-              href="/login"
-              className="relative inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-gray-900 transition-all duration-300 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:shadow-md sm:px-8 sm:py-4 sm:text-lg"
-            >
+            <Link href="/login" className="relative inline-flex items-center justify-center px-5 py-2.5 sm:px-6 sm:py-3.5 text-sm sm:text-base font-semibold text-gray-900 transition-all duration-300 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:shadow-md">
               Browse Activities
             </Link>
           </div>
@@ -651,25 +681,18 @@ export default function Home() {
 
       {/* ========================= Footer ======================== */}
       <footer className="relative z-10 border-t border-gray-200 bg-white">
-        <div className="max-w-6xl mx-auto px-5 py-10 sm:py-12">
-          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5 py-8 sm:py-10 md:py-12">
+          <div className="flex flex-col items-center justify-between gap-4 sm:gap-6 md:flex-row">
             <div className="text-center md:text-left">
-              <p className="text-base font-semibold text-gray-900 sm:text-lg">Nowio</p>
-              <p className="mt-1 text-xs text-gray-500 sm:mt-2 sm:text-sm">
+              <p className="text-sm sm:text-base font-semibold text-gray-900">Nowio</p>
+              <p className="mt-1 text-xs text-gray-500 sm:mt-2">
                 Find what to do and who to do it with • © {new Date().getFullYear()}
               </p>
             </div>
-
-            <div className="flex flex-wrap justify-center gap-4 text-xs sm:text-sm sm:gap-6">
-              <Link href="/contact" className="text-gray-500 hover:text-gray-700">
-                Contact
-              </Link>
-              <Link href="/legal/terms" className="text-gray-500 hover:text-gray-700">
-                Terms
-              </Link>
-              <Link href="/legal/privacy" className="text-gray-500 hover:text-gray-700">
-                Privacy
-              </Link>
+            <div className="flex flex-wrap justify-center gap-3 sm:gap-4 text-xs sm:text-sm">
+              <Link href="/contact" className="text-gray-500 hover:text-gray-700">Contact</Link>
+              <Link href="/legal/terms" className="text-gray-500 hover:text-gray-700">Terms</Link>
+              <Link href="/legal/privacy" className="text-gray-500 hover:text-gray-700">Privacy</Link>
             </div>
           </div>
         </div>

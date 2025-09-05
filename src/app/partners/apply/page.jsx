@@ -43,7 +43,7 @@ export default function PartnerApplyPage() {
 
   return (
     <main className="mx-auto max-w-xl p-6">
-      <h1 className="text-2xl font-semibold">Apply to Spontaneo (Free Pilot)</h1>
+      <h1 className="text-2xl font-semibold">Apply to Nowio (Free Pilot)</h1>
       <form onSubmit={onSubmit} className="mt-6 grid gap-4">
         <input name="name" placeholder="Business name" required className="border p-2 rounded" />
         <select name="neighborhood" required className="border p-2 rounded">
