@@ -39,7 +39,7 @@ export default function ContactPage({
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="text-sm text-gray-500">Email</div>
               <a href="mailto:hello@nowio.app" className="mt-1 block text-lg font-semibold text-gray-900 hover:underline">
-                hello@nowio.app
+                support@nowio.app
               </a>
               <p className="mt-2 text-sm text-gray-600">Best for general questions & venue inquiries.</p>
             </div>
@@ -88,7 +88,7 @@ export default function ContactPage({
               </button>
 
               <p className="text-xs text-gray-500">
-                Prefer email? <a className="underline" href="mailto:hello@nowio.app">hello@nowio.app</a>
+                Prefer email? <a className="underline" href="mailto:hello@nowio.app">support@nowio.app</a>
               </p>
             </form>
           </div>
