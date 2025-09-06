@@ -68,4 +68,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: e?.message || "Resume failed" }, { status: 500 })
   }
 }
-s
