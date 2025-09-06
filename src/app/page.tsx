@@ -274,6 +274,86 @@ function ActivityCarousel({ items }: { items: Activity[] }) {
   )
 }
 
+/* ---------- Trust & Safety UI bits (drop-in) ---------- */
+function VerifiedTickIcon() {
+  return (
+    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-sky-500 text-white shadow-sm ring-1 ring-white/70 align-middle">
+      <svg viewBox="0 0 24 24" className="w-[10px] h-[10px]" aria-hidden="true">
+        <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z" fill="currentColor" />
+      </svg>
+    </span>
+  )
+}
+
+/** A slim reassurance bar under the hero CTAs */
+function SafetyStrip() {
+  return (
+    <div className="mt-5 sm:mt-6">
+      <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/90 px-3 py-1.5 text-xs sm:text-sm text-gray-700 shadow-sm">
+        <VerifiedTickIcon />
+        <span className="font-medium">Real people, verified identities</span>
+        <span className="mx-2 text-gray-300">•</span>
+        <span>Report & block controls</span>
+        <span className="mx-2 text-gray-300">•</span>
+        <span>Meet-in-public tips</span>
+      </div>
+    </div>
+  )
+}
+
+/** A fuller section you can link to (#safety) */
+function TrustSafetySection() {
+  return (
+    <section id="safety" className="py-12 sm:py-16 md:py-20 bg-gradient-to-b from-white to-gray-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-5">
+        <div className="text-center mb-8 sm:mb-12 md:mb-16">
+          <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 text-sky-700 px-3 py-1 text-xs sm:text-sm border border-sky-100">
+            <VerifiedTickIcon /> <span className="font-medium">Trust & Safety</span>
+          </div>
+          <h2 className="mt-4 text-2xl sm:text-3xl md:4xl font-bold tracking-tight text-gray-900">
+            Safety first, then fun
+          </h2>
+          <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
+            We help everyone feel comfortable meeting new people by verifying identities and giving you control.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-3">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+            <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-700 grid place-items-center mb-3">
+              <VerifiedTickIcon />
+            </div>
+            <h3 className="font-semibold text-gray-900 mb-1.5">ID-Verified Profiles</h3>
+            <p className="text-sm text-gray-600">
+              Look for the blue check on hosts and attendees. We use secure, industry-standard identity checks.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+            <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-700 grid place-items-center mb-3">
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z"/></svg>
+            </div>
+            <h3 className="font-semibold text-gray-900 mb-1.5">Report & Block</h3>
+            <p className="text-sm text-gray-600">
+              You’re in control. Quickly report or block users and we’ll handle the rest.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+            <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center mb-3">
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor"><path d="M12 2 2 7l10 5 10-5-10-5Zm0 7L2 4v13l10 5 10-5V4l-10 5Z"/></svg>
+            </div>
+            <h3 className="font-semibold text-gray-900 mb-1.5">Smart Safety Tips</h3>
+            <p className="text-sm text-gray-600">
+              Meet in public places, share plans with a friend, and use in-app chat until you’re comfortable.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 /* --------------------------------- Page ---------------------------------- */
 export default function Home() {
   const router = useRouter()
@@ -350,6 +430,7 @@ export default function Home() {
             <nav className="hidden md:flex items-center gap-6">
               <a href="#activities" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Activities</a>
               <a href="#how" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">How It Works</a>
+              <a href="#safety" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Safety</a>
               <a href="#niches" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Popular Categories</a>
               <Link href="/pricing" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Pricing</Link>
             </nav>
@@ -386,6 +467,7 @@ export default function Home() {
             <nav className="px-4 py-3">
               <a href="#activities" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Activities</a>
               <a href="#how" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">How It Works</a>
+              <a href="#safety" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Safety</a>
               <a href="#niches" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Popular Categories</a>
               <Link href="/pricing" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Pricing</Link>
               <div className="my-2 border-t border-gray-100" />
@@ -426,6 +508,9 @@ export default function Home() {
               Browse Activities
             </Link>
           </div>
+
+          {/* Trust & Safety micro-strip */}
+          <SafetyStrip />
         </div>
 
         {/* Showcase tiles */}
@@ -477,7 +562,7 @@ export default function Home() {
       <section id="activities" className="py-12 sm:py-16 md:py-20 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
+            <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">
               What's happening near you
             </h2>
             <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
@@ -512,7 +597,7 @@ export default function Home() {
       <section id="how" className="py-12 sm:py-16 md:py-20 bg-gradient-to-b from-white to-gray-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
+            <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">
               Plan → Chat → Meet & Experience
             </h2>
             <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
@@ -540,11 +625,14 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ===================== Trust & Safety (NEW) ===================== */}
+      <TrustSafetySection />
+
       {/* ===================== Popular Categories ===================== */}
       <section id="niches" className="py-12 sm:py-16 md:py-20 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">Popular Categories</h2>
+            <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">Popular Categories</h2>
             <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">Explore activities by category to find what interests you most</p>
           </div>
 
@@ -586,7 +674,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2 items-center">
             <div>
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
+              <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">
                 Can't find what you're looking for?
               </h2>
               <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600">
@@ -662,7 +750,7 @@ export default function Home() {
       {/* ===================== Final CTA ===================== */}
       <section className="py-12 sm:py-16 md:py-20 bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-5 text-center">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
+          <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">
             Ready to find your next activity?
           </h2>
           <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600">
