@@ -27,6 +27,19 @@ function VerifiedBadge({ small=false }:{ small?: boolean }) {
   )
 }
 
+/** Bold, visible tick (blue circle + white check) with tooltip */
+function VerifiedTick() {
+  return (
+    <span className="ml-1 inline-flex items-center align-middle" title="Verified" aria-label="Verified">
+      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-sky-500 text-white shadow-sm ring-1 ring-white/70">
+        <svg viewBox="0 0 24 24" className="w-[10px] h-[10px]" aria-hidden="true">
+          <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z" fill="currentColor" />
+        </svg>
+      </span>
+    </span>
+  )
+}
+
 function whenLabel(startISO: string) {
   const d = new Date(startISO)
   const now = new Date()
@@ -82,6 +95,8 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
 
   const creatorName = a?.creator?.full_name || 'Someone'
   const creatorVerified = !!a?.creator?.is_verified
+  const displayName = isOwner ? 'You' : creatorName
+
   const avatarSrc = useMemo(() => {
     return a?.creator?.avatar_url ||
       `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(creatorName)}`
@@ -96,14 +111,12 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
     try { const r = await fetch(`/api/plans/${a.id}/confirm`, { method: 'POST' }); return r.ok } catch { return false }
   }
 
-  // TEMP: skip verification requirement in join()
   async function join() {
     setLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { alert('Please log in.'); return }
 
-      // Try server endpoint; else direct insert (no `state` column)
       const ok = await tryConfirmEndpoint()
       if (!ok) {
         const { error } = await supabase
@@ -123,7 +136,6 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
     if (!confirm('Leave this plan?')) return
     setLoading(true)
     try {
-      // Prefer server route if exists
       let ok = false
       try {
         const r = await fetch(`/api/plans/${a.id}/leave`, { method: 'POST' })
@@ -141,7 +153,7 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
         if (error) throw error
       }
 
-      onJoined?.(a.id) // refresh list
+      onJoined?.(a.id)
     } catch (e: any) {
       alert(e?.message ?? 'Failed to leave')
     } finally {
@@ -159,9 +171,8 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
         <img src={avatarSrc} className="w-9 h-9 rounded-full object-cover" alt="" />
         <div className="min-w-0">
           <div className="font-semibold truncate">
-            {creatorName}
-            {creatorVerified && <VerifiedBadge small />}
-            {isOwner && <span className="ml-2 text-xs text-indigo-600">(You)</span>}
+            {displayName}
+            {creatorVerified && <VerifiedTick />}
           </div>
           <div className="text-[11px] text-gray-400">{a.created_at ? new Date(a.created_at).toLocaleString() : ''}</div>
         </div>
@@ -253,7 +264,6 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
             Edit Activity
           </Link>
         ) : isJoined ? (
-          // WAS: disabled "You're In" — now it's a real Leave action
           <button
             onClick={leave}
             disabled={loading}

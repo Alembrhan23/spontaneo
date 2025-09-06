@@ -1,20 +1,19 @@
-// app/api/webhooks/stripe/route.ts
-import { NextResponse } from "next/server"
-import Stripe from "stripe"
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
+import { NextResponse } from 'next/server'
+import Stripe from 'stripe'
+import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 
-export const runtime = "nodejs"
-export const dynamic = "force-dynamic"
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY
-  if (!key) throw new Error("Missing STRIPE_SECRET_KEY")
-  return new Stripe(key, { apiVersion: "2024-06-20" })
+  if (!key) throw new Error('Missing STRIPE_SECRET_KEY')
+  return new Stripe(key, { apiVersion: '2024-06-20' })
 }
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) throw new Error("Missing Supabase admin envs")
+  if (!url || !key) throw new Error('Missing Supabase admin envs')
   return createSupabaseAdmin(url, key, { auth: { persistSession: false } })
 }
 
@@ -31,18 +30,16 @@ async function upsertSub(
     current_period_end?: string | null
   }
 ) {
-  await supabase
-    .from("user_subscriptions")
-    .upsert({ user_id, ...data }, { onConflict: "user_id" })
+  await supabase.from('user_subscriptions').upsert({ user_id, ...data }, { onConflict: 'user_id' })
 }
 
 export async function POST(req: Request) {
   const stripe = getStripe()
   const supabase = getSupabase()
 
-  const sig = req.headers.get("stripe-signature") || ""
+  const sig = req.headers.get('stripe-signature') || ''
   const secret = process.env.STRIPE_WEBHOOK_SECRET
-  if (!secret) return NextResponse.json({ error: "Missing STRIPE_WEBHOOK_SECRET" }, { status: 500 })
+  if (!secret) return NextResponse.json({ error: 'Missing STRIPE_WEBHOOK_SECRET' }, { status: 500 })
 
   const body = await req.text()
 
@@ -55,15 +52,14 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
-      case "checkout.session.completed": {
+      // ---------- BILLING ----------
+      case 'checkout.session.completed': {
         const s = event.data.object as Stripe.Checkout.Session
-        if (s.mode !== "subscription") break
+        if (s.mode !== 'subscription') break
 
         const userId = (s.metadata?.userId || s.client_reference_id) as string | undefined
-        const customerId =
-          (typeof s.customer === "string" ? s.customer : s.customer?.id) || null
-        const subId =
-          (typeof s.subscription === "string" ? s.subscription : s.subscription?.id) || null
+        const customerId = (typeof s.customer === 'string' ? s.customer : s.customer?.id) || null
+        const subId = (typeof s.subscription === 'string' ? s.subscription : s.subscription?.id) || null
 
         let priceId: string | null = null
         let interval: string | null = null
@@ -72,10 +68,7 @@ export async function POST(req: Request) {
         let plan: string | null = (s.metadata?.plan as string) || null
 
         if (subId) {
-          // Narrow to Stripe.Subscription explicitly
-          const subResp = await stripe.subscriptions.retrieve(subId)
-          const sub = subResp as unknown as Stripe.Subscription
-
+          const sub = (await stripe.subscriptions.retrieve(subId)) as Stripe.Subscription
           const item = sub.items.data[0]
           priceId = item?.price?.id || null
           interval = (item?.price?.recurring?.interval as string) || null
@@ -85,9 +78,9 @@ export async function POST(req: Request) {
             : null
 
           if (!plan) {
-            const lookup = item?.price?.lookup_key || ""
-            if (lookup.includes("bpro")) plan = "business_pro"
-            else if (lookup.includes("plus")) plan = "plus"
+            const lookup = item?.price?.lookup_key || ''
+            if (lookup.includes('bpro')) plan = 'business_pro'
+            else if (lookup.includes('plus')) plan = 'plus'
           }
           if (!plan && sub.metadata?.plan) plan = sub.metadata.plan as string
         }
@@ -106,14 +99,13 @@ export async function POST(req: Request) {
         break
       }
 
-      case "customer.subscription.created":
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
-        // Event object is a real Stripe.Subscription already
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription
 
         const customerId =
-          (typeof sub.customer === "string" ? sub.customer : sub.customer?.id) || null
+          (typeof sub.customer === 'string' ? sub.customer : sub.customer?.id) || null
         const item = sub.items.data[0]
         const priceId = item?.price?.id || null
         const interval = (item?.price?.recurring?.interval as string) || null
@@ -124,18 +116,17 @@ export async function POST(req: Request) {
 
         let plan: string | null = (sub.metadata?.plan as string) || null
         if (!plan) {
-          const lookup = item?.price?.lookup_key || ""
-          if (lookup.includes("bpro")) plan = "business_pro"
-          else if (lookup.includes("plus")) plan = "plus"
+          const lookup = item?.price?.lookup_key || ''
+          if (lookup.includes('bpro')) plan = 'business_pro'
+          else if (lookup.includes('plus')) plan = 'plus'
         }
 
-        // Find user row via metadata or existing mapping
         let userId = (sub.metadata?.userId as string) || null
         if (!userId && customerId) {
           const { data: existing } = await supabase
-            .from("user_subscriptions")
-            .select("user_id")
-            .eq("stripe_customer_id", customerId)
+            .from('user_subscriptions')
+            .select('user_id')
+            .eq('stripe_customer_id', customerId)
             .maybeSingle()
           userId = existing?.user_id ?? null
         }
@@ -154,12 +145,80 @@ export async function POST(req: Request) {
         break
       }
 
+      // ---------- IDENTITY (with fallback by session id) ----------
+      case 'identity.verification_session.verified': {
+        const vs = event.data.object as Stripe.Identity.VerificationSession
+        let userId = (vs.metadata?.userId as string) || null
+
+        // Fallback: match the session id we stored when starting verification
+        if (!userId) {
+          const { data: match } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('stripe_verification_session_id', vs.id)
+            .maybeSingle()
+          userId = (match as any)?.id ?? null
+        }
+
+        if (userId) {
+          await supabase
+            .from('profiles')
+            .update({
+              is_verified: true,
+              verification_status: 'verified',
+              verified_at: new Date().toISOString(),
+              stripe_verification_session_id: vs.id,
+            })
+            .eq('id', userId)
+        }
+        break
+      }
+      case 'identity.verification_session.requires_input': {
+        const vs = event.data.object as Stripe.Identity.VerificationSession
+        let userId = (vs.metadata?.userId as string) || null
+        if (!userId) {
+          const { data: match } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('stripe_verification_session_id', vs.id)
+            .maybeSingle()
+          userId = (match as any)?.id ?? null
+        }
+        if (userId) {
+          await supabase
+            .from('profiles')
+            .update({ verification_status: 'requires_input', stripe_verification_session_id: vs.id })
+            .eq('id', userId)
+        }
+        break
+      }
+      case 'identity.verification_session.canceled': {
+        const vs = event.data.object as Stripe.Identity.VerificationSession
+        let userId = (vs.metadata?.userId as string) || null
+        if (!userId) {
+          const { data: match } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('stripe_verification_session_id', vs.id)
+            .maybeSingle()
+          userId = (match as any)?.id ?? null
+        }
+        if (userId) {
+          await supabase
+            .from('profiles')
+            .update({ verification_status: 'canceled', stripe_verification_session_id: vs.id })
+            .eq('id', userId)
+        }
+        break
+      }
+
       default:
         break
     }
 
     return NextResponse.json({ received: true })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Webhook handler error" }, { status: 500 })
+    console.error('Webhook handler error:', err)
+    return NextResponse.json({ error: err.message || 'Webhook handler error' }, { status: 500 })
   }
 }

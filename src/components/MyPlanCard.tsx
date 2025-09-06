@@ -31,6 +31,7 @@ function Avatar({ url, name }: { url?: string|null, name?: string|null }) {
   )
 }
 
+/** Kept for backwards-compat (not used now) */
 function VerifiedBadge({ small=false }:{ small?: boolean }) {
   return (
     <span
@@ -41,6 +42,19 @@ function VerifiedBadge({ small=false }:{ small?: boolean }) {
         <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z"/>
       </svg>
       <span>Verified</span>
+    </span>
+  )
+}
+
+/** Bold, visible tick: blue circle + white check (Twitter/Facebook style) */
+function VerifiedTick() {
+  return (
+    <span className="ml-1 inline-flex items-center align-middle" title="Verified" aria-label="Verified">
+      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-sky-500 text-white shadow-sm ring-1 ring-white/70">
+        <svg viewBox="0 0 24 24" className="w-[10px] h-[10px]" aria-hidden="true">
+          <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z" fill="currentColor" />
+        </svg>
+      </span>
     </span>
   )
 }
@@ -132,8 +146,16 @@ export default function MyPlanCard({ mode, activity: a, onChange, unreadCount = 
           <Avatar url={hostAvatar} name={hostName} />
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm text-zinc-500">
-              <span>{mode === 'hosting' ? 'You are hosting' : `Hosted by ${hostName}`}</span>
-              {hostVerified && <VerifiedBadge small />}
+              <span className="flex items-center">
+                {mode === 'hosting' ? (
+                  'You are hosting'
+                ) : (
+                  <>
+                    Hosted by <span className="ml-1 font-medium text-zinc-700">{hostName}</span>
+                  </>
+                )}
+                {hostVerified && <VerifiedTick />}
+              </span>
             </div>
             <h3 className="font-semibold text-zinc-900 truncate">{a.title || 'Untitled plan'}</h3>
           </div>
