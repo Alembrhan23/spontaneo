@@ -6,7 +6,13 @@ import { supabase } from '@/lib/supabase/client'
 
 type Socials = { website?: string; instagram?: string; twitter?: string; tiktok?: string; linkedin?: string }
 type Profile = { full_name: string; avatar_url: string | null; neighborhood: string | null; bio: string | null; is_verified: boolean; socials: Socials }
-type Subscription = { stripe_customer_id: string | null; stripe_subscription_id: string | null; price_id: string | null; plan: string | null }
+type Subscription = {
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  price_id: string | null
+  plan: string | null
+  status: string | null // <- added
+}
 
 const NEIGHBORHOODS = ['RiNo', 'LoHi', 'Five Points'] as const
 const SOCIAL_KEYS: (keyof Socials)[] = ['website', 'instagram', 'twitter', 'tiktok', 'linkedin']
@@ -71,16 +77,17 @@ export default function ProfilePage() {
       const { data: bal } = await supabase.from('vibe_points_balance').select('balance').eq('user_id', user.id).maybeSingle()
       setVp(bal?.balance ?? 0)
 
+      // ▼ pull status too
       const { data: subRow } = await supabase
         .from('user_subscriptions')
-        .select('stripe_customer_id, stripe_subscription_id, price_id, plan')
+        .select('stripe_customer_id, stripe_subscription_id, price_id, plan, status')
         .eq('user_id', user.id)
         .maybeSingle()
       setSub(subRow ?? null)
 
       setLoading(false)
 
-      // 🔄 live update when webhook writes to profiles
+      // live update when webhook writes to profiles
       const ch = supabase
         .channel('profile-verify')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, (payload) => {
@@ -147,10 +154,17 @@ export default function ProfilePage() {
   async function openPortal() {
     try {
       setBillingBusy(true)
+      // guard: only portal for actual subscribers; otherwise pricing
+      const hasSub = Boolean(sub?.stripe_subscription_id)
+      if (!hasSub) {
+        window.location.href = '/pricing'
+        return
+      }
       const res = await fetch('/api/portal', { method: 'POST' })
       if (res.status === 401) { router.push('/login?next=/profile'); return }
       const data = await res.json()
-      window.location.href = data?.url || '/pricing?createCustomer=1'
+      if (data?.url) window.location.href = data.url
+      else window.location.href = '/pricing'
     } catch (e: any) {
       alert(e?.message || 'Something went wrong.')
     } finally { setBillingBusy(false) }
@@ -161,11 +175,13 @@ export default function ProfilePage() {
   if (loading) return <div className="p-4">Loading…</div>
 
   const avatarSrc = p.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(p.full_name || 'User')}`
-  const showManage = !!(sub?.stripe_customer_id || sub?.stripe_subscription_id)
+  // SHOW MANAGE ONLY IF THERE'S A SUBSCRIPTION (not just a customer)
+  const hasSub = Boolean(sub?.stripe_subscription_id)
 
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6">
       <div className="bg-white rounded-2xl shadow p-4 sm:p-6 space-y-6">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="flex items-center gap-4 flex-1 min-w-0">
             <img src={avatarSrc} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shrink-0" alt="avatar" />
@@ -179,7 +195,7 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex gap-2 w-full sm:w-auto">
-            {showManage ? (
+            {hasSub ? (
               <button onClick={openPortal} disabled={billingBusy} className="flex-1 sm:flex-none rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50">
                 {billingBusy ? 'Opening…' : 'Manage plan'}
               </button>
@@ -206,8 +222,50 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* form & rest of your page unchanged below */}
-        {/* ... keep all your existing fields, save(), links, billing summary, etc ... */}
+        {/* === Your existing form & sections remain unchanged === */}
+        {/* ... keep all your fields, save(), links, etc ... */}
+
+        {/* Billing summary */}
+        <div className="pt-4 border-t">
+          <h2 className="font-semibold mb-2">Billing</h2>
+          {hasSub && sub ? (
+            <div className="text-sm text-gray-700 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {sub.plan && (
+                  <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5">
+                    {sub.plan === 'business_pro' ? 'Business Pro' : 'Social Plus'}
+                  </span>
+                )}
+                {sub.price_id && (
+                  <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">
+                    price: {sub.price_id}
+                  </span>
+                )}
+                {sub.status && (
+                  <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">
+                    status: {sub.status}
+                  </span>
+                )}
+              </div>
+              <div>
+                <button
+                  onClick={openPortal}
+                  disabled={billingBusy}
+                  className="rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  {billingBusy ? 'Opening…' : 'Manage plan'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-600">
+              No active subscription.{' '}
+              <a href="/pricing" className="text-indigo-600 hover:underline">
+                See plans
+              </a>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
