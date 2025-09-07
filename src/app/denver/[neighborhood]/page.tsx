@@ -137,4 +137,3 @@ export default async function NeighborhoodPage({ params }: { params: { neighborh
     </main>
   )
 }
-s
