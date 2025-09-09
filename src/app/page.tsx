@@ -13,6 +13,7 @@ type Activity = {
   location: string
   attendees: number
   status: 'Open' | 'Almost full'
+  hasPerk?: boolean
 }
 
 /* ------------------------------ UI Components ---------------------------- */
@@ -23,15 +24,25 @@ function ActivityCard({ a }: { a: Activity }) {
         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-xl sm:text-2xl">
           {a.emoji}
         </div>
-        <span
-          className={`text-xs font-medium px-2 py-1 sm:px-3 sm:py-1.5 rounded-full ${
-            a.status === 'Open'
-              ? 'bg-green-100 text-green-800'
-              : 'bg-amber-100 text-amber-800'
-          }`}
-        >
-          {a.status}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span
+            className={`text-xs font-medium px-2 py-1 sm:px-3 sm:py-1.5 rounded-full ${
+              a.status === 'Open'
+                ? 'bg-green-100 text-green-800'
+                : 'bg-amber-100 text-amber-800'
+            }`}
+          >
+            {a.status}
+          </span>
+          {a.hasPerk && (
+            <div className="flex items-center text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5 5a3 3 0 015-2.236A3 3 0 0114.83 6H16a2 2 0 110 4h-5V9a1 1 0 10-2 0v1H4a2 2 0 110-4h1.17C5.06 5.687 5 5.35 5 5zm4 1V5a1 1 0 10-1 1h1zm3 0a1 1 0 10-1-1v1h1z" clipRule="evenodd" />
+              </svg>
+              Special perk
+            </div>
+          )}
+        </div>
       </div>
 
       <h3 className="font-semibold text-gray-900 text-base sm:text-lg mb-2 sm:mb-3">{a.title}</h3>
@@ -311,10 +322,10 @@ function TrustSafetySection() {
             <VerifiedTickIcon /> <span className="font-medium">Trust & Safety</span>
           </div>
           <h2 className="mt-4 text-2xl sm:text-3xl md:4xl font-bold tracking-tight text-gray-900">
-            Safety first, then fun
+            Your safety is our priority
           </h2>
           <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
-            We help everyone feel comfortable meeting new people by verifying identities and giving you control.
+            We've built multiple layers of protection to ensure everyone has a safe and positive experience
           </p>
         </div>
 
@@ -335,7 +346,7 @@ function TrustSafetySection() {
             </div>
             <h3 className="font-semibold text-gray-900 mb-1.5">Report & Block</h3>
             <p className="text-sm text-gray-600">
-              You’re in control. Quickly report or block users and we’ll handle the rest.
+              You're in control. Quickly report or block users and we'll handle the rest.
             </p>
           </div>
 
@@ -345,8 +356,94 @@ function TrustSafetySection() {
             </div>
             <h3 className="font-semibold text-gray-900 mb-1.5">Smart Safety Tips</h3>
             <p className="text-sm text-gray-600">
-              Meet in public places, share plans with a friend, and use in-app chat until you’re comfortable.
+              Meet in public places, share plans with a friend, and use in-app chat until you're comfortable.
             </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ---------- Business Partnerships Section ---------- */
+function BusinessPartnershipsSection() {
+  return (
+    <section id="partners" className="py-12 sm:py-16 md:py-20 bg-white">
+      <div className="max-w-6xl mx-auto px-4 sm:px-5">
+        <div className="text-center mb-8 sm:mb-12 md:mb-16">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
+            Exclusive Perks & Partnerships
+          </h2>
+          <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
+            Enjoy special benefits at local businesses when you join activities through Nowio
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div>
+            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-6 rounded-2xl border border-purple-100">
+              <h3 className="font-semibold text-lg text-gray-900 mb-4">For Participants</h3>
+              <ul className="space-y-3">
+                {[
+                  "10% off at partner coffee shops",
+                  "Free appetizer with purchase at local restaurants",
+                  "Discounted entry to fitness classes",
+                  "Special tasting flights at breweries"
+                ].map((perk, index) => (
+                  <li key={index} className="flex items-start">
+                    <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mt-0.5 mr-3 flex-shrink-0">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-700">{perk}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          
+          <div>
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-2xl border border-amber-100">
+              <h3 className="font-semibold text-lg text-gray-900 mb-4">For Business Owners</h3>
+              <p className="text-gray-700 mb-4">
+                Partner with us to attract new customers and fill your venue during off-peak hours.
+              </p>
+              <ul className="space-y-2">
+                <li className="flex items-center">
+                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mr-2 flex-shrink-0">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-gray-700">Drive foot traffic during slow periods</span>
+                </li>
+                <li className="flex items-center">
+                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mr-2 flex-shrink-0">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-gray-700">Reach highly-engaged local customers</span>
+                </li>
+                <li className="flex items-center">
+                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mr-2 flex-shrink-0">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-gray-700">Simple analytics to track campaign success</span>
+                </li>
+              </ul>
+              <div className="mt-6">
+                <Link href="/business" className="inline-flex items-center text-amber-700 hover:text-amber-800 font-medium text-sm">
+                  Learn about business partnerships
+                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -431,8 +528,8 @@ export default function Home() {
               <a href="#activities" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Activities</a>
               <a href="#how" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">How It Works</a>
               <a href="#safety" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Safety</a>
-              <a href="#niches" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Popular Categories</a>
-              <Link href="/pricing" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Pricing</Link>
+              <a href="#partners" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Perks</a>
+              <a href="#niches" className="text-gray-700 hover:text-indigo-600 transition-colors font-medium">Categories</a>
             </nav>
 
             <div className="hidden md:flex items-center gap-3">
@@ -468,8 +565,8 @@ export default function Home() {
               <a href="#activities" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Activities</a>
               <a href="#how" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">How It Works</a>
               <a href="#safety" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Safety</a>
-              <a href="#niches" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Popular Categories</a>
-              <Link href="/pricing" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Pricing</Link>
+              <a href="#partners" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Perks</a>
+              <a href="#niches" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Categories</a>
               <div className="my-2 border-t border-gray-100" />
               <Link href="/login" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-gray-800 hover:bg-gray-50 font-medium">Sign In</Link>
               <Link href="/signup" onClick={() => setMobileOpen(false)} className="mt-1 block w-full text-center px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium">Get Started</Link>
@@ -490,14 +587,15 @@ export default function Home() {
           </p>
 
           <h1 className="mt-6 sm:mt-8 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900">
-            <span className="block">Find activities.</span>
+            <span className="block">Do more of what you love.</span>
             <span className="block mt-2 sm:mt-3 text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-amber-500">
-              Meet your people.
+              With people who get it.
             </span>
           </h1>
 
+              {/* "Do more of what you love. With people who get it." */}
           <p className="mt-4 sm:mt-6 text-lg sm:text-xl leading-7 sm:leading-8 text-gray-600">
-            Discover what's happening right now in your neighborhood and connect with others who share your interests.
+            Find curated experiences in your neighborhood and enjoy exclusive perks when you try them with new friends.
           </p>
 
           <div className="mt-8 sm:mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
@@ -562,7 +660,7 @@ export default function Home() {
       <section id="activities" className="py-12 sm:py-16 md:py-20 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
               What's happening near you
             </h2>
             <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
@@ -573,12 +671,12 @@ export default function Home() {
           {/* One-row interactive carousel */}
           <ActivityCarousel
             items={[
-              { emoji: '☕', title: 'Coffee & Cowork',   time: 'Today • 10:00 AM',  location: 'Thump Coffee • RiNo',        attendees: 4, status: 'Open' },
+              { emoji: '☕', title: 'Coffee & Cowork',   time: 'Today • 10:00 AM',  location: 'Thump Coffee • RiNo',        attendees: 4, status: 'Open', hasPerk: true },
               { emoji: '🏓', title: 'Pickleball Social', time: 'Today • 5:30 PM',   location: 'Central Park Courts',        attendees: 6, status: 'Almost full' },
-              { emoji: '🍻', title: 'Brewery Hangout',   time: 'Tomorrow • 7:00 PM', location: 'Ratio Beerworks',            attendees: 3, status: 'Open' },
+              { emoji: '🍻', title: 'Brewery Hangout',   time: 'Tomorrow • 7:00 PM', location: 'Ratio Beerworks',            attendees: 3, status: 'Open', hasPerk: true },
               { emoji: '🎨', title: 'Art Walk Meetup',   time: 'Fri • 6:00 PM',     location: 'Santa Fe Arts District',     attendees: 8, status: 'Open' },
               { emoji: '🚶', title: 'City Park Walk',    time: 'Sat • 9:00 AM',     location: 'City Park • Five Points',    attendees: 5, status: 'Open' },
-              { emoji: '🎲', title: 'Board Game Night',  time: 'Sat • 6:30 PM',     location: 'The Wizards Chest',          attendees: 7, status: 'Almost full' },
+              { emoji: '🎲', title: 'Board Game Night',  time: 'Sat • 6:30 PM',     location: 'The Wizards Chest',          attendees: 7, status: 'Almost full', hasPerk: true },
             ]}
           />
 
@@ -597,7 +695,7 @@ export default function Home() {
       <section id="how" className="py-12 sm:py-16 md:py-20 bg-gradient-to-b from-white to-gray-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
               Plan → Chat → Meet & Experience
             </h2>
             <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
@@ -628,11 +726,14 @@ export default function Home() {
       {/* ===================== Trust & Safety (NEW) ===================== */}
       <TrustSafetySection />
 
+      {/* ===================== Business Partnerships (NEW) ===================== */}
+      <BusinessPartnershipsSection />
+
       {/* ===================== Popular Categories ===================== */}
       <section id="niches" className="py-12 sm:py-16 md:py-20 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">Popular Categories</h2>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">Popular Categories</h2>
             <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">Explore activities by category to find what interests you most</p>
           </div>
 
@@ -674,7 +775,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2 items-center">
             <div>
-              <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
                 Can't find what you're looking for?
               </h2>
               <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600">
@@ -750,7 +851,7 @@ export default function Home() {
       {/* ===================== Final CTA ===================== */}
       <section className="py-12 sm:py-16 md:py-20 bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-5 text-center">
-          <h2 className="text-2xl sm:3xl md:text-4xl font-bold tracking-tight text-gray-900">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
             Ready to find your next activity?
           </h2>
           <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600">
@@ -779,6 +880,7 @@ export default function Home() {
             </div>
             <div className="flex flex-wrap justify-center gap-3 sm:gap-4 text-xs sm:text-sm">
               <Link href="/contact" className="text-gray-500 hover:text-gray-700">Contact</Link>
+              <Link href="/business" className="text-gray-500 hover:text-gray-700">For Businesses</Link>
               <Link href="/legal/terms" className="text-gray-500 hover:text-gray-700">Terms</Link>
               <Link href="/legal/privacy" className="text-gray-500 hover:text-gray-700">Privacy</Link>
             </div>
