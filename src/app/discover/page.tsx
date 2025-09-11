@@ -39,7 +39,7 @@ const quickActions = [
   { icon: Coffee,    label: 'Co-work',      desc: 'Coffee & sprints',      action: 'filter:Coffee & Co-work' },
 ] as const
 
-const neighborhoods = ['All Neighborhoods', 'RiNo', 'LoHi', 'Five Points'] as const
+const neighborhoods = ['All Neighborhoods', 'RiNo', 'LoHi', 'Five Points', 'capitol Hill','Cherry Creek','Highlands','Downtown','park Hill'] as const
 const filters = [
   'All Activities',
   'Outdoors',
