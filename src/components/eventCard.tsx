@@ -9,7 +9,7 @@ type Business = {
   neighborhood: string
   location?: string | null
   image_url?: string | null
-  image_path?: string | null   // added
+  image_path?: string | null
 }
 
 type EventRow = {
@@ -20,7 +20,7 @@ type EventRow = {
   end_at?: string | null
   url?: string | null
   image_url?: string | null
-  image_path?: string | null    // optional, added
+  image_path?: string | null
   price_text?: string | null
   is_free?: boolean
   tags?: string[] | null
@@ -52,6 +52,28 @@ function relStartsIn(start: Date) {
   if (mins < 60) return `${mins} min`
   return `${Math.round(mins / 60)} hr`
 }
+
+// Fixed status logic
+function getEventStatus(start: Date, end?: Date | null) {
+  const now = new Date()
+
+  if (end && end < now) {
+    return { status: 'ended', label: 'Ended', color: 'gray' }
+  }
+
+  if (start <= now && (!end || end >= now)) {
+    return { status: 'live', label: 'Live', color: 'green' }
+  }
+
+  const hoursDiff = (start.getTime() - now.getTime()) / (1000 * 60 * 60)
+
+  if (hoursDiff <= 12) {
+    return { status: 'soon', label: 'Soon', color: 'yellow' }
+  }
+
+  return { status: 'upcoming', label: 'Upcoming', color: 'blue' }
+}
+
 function MapPinIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className ?? 'h-4 w-4 text-rose-600'} fill="currentColor" aria-hidden>
@@ -60,7 +82,7 @@ function MapPinIcon({ className }: { className?: string }) {
   )
 }
 
-const BUCKET = 'business-images' // your Storage bucket
+const BUCKET = 'business-images'
 
 /* ---------- component ---------- */
 export default function EventCard({ event, business, userId, isAdmin }: Props) {
@@ -68,6 +90,7 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
   const end = useMemo(() => (event.end_at ? new Date(event.end_at) : null), [event.end_at])
   const timeLabel = useMemo(() => fmtTimeLabel(start), [start])
   const startsIn = useMemo(() => relStartsIn(start), [start])
+  const eventStatus = useMemo(() => getEventStatus(start, end), [start, end])
 
   const [interested, setInterested] = useState(false)
   const [interestedCount, setInterestedCount] = useState<number>(0)
@@ -76,21 +99,18 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
   const [shared, setShared] = useState(false)
   const [open, setOpen] = useState(false)
 
-  // ---- hero image resolution (event → business → storage path) ----
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
 
+  // Resolve image
   useEffect(() => {
     let cancelled = false
 
     async function resolveHero() {
-      // 1) direct URLs first (no storage calls)
       if (event.image_url) { setHeroUrl(event.image_url); return }
       if (business?.image_url) { setHeroUrl(business.image_url); return }
 
-      // 2) try paths already on the props
       const path = event.image_path || business?.image_path
       if (path) {
-        // prefer public URL if bucket is public; else signed URL
         const pub = supabase.storage.from(BUCKET).getPublicUrl(path)
         if (pub?.data?.publicUrl) { setHeroUrl(pub.data.publicUrl); return }
         const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 60)
@@ -98,7 +118,6 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
         return
       }
 
-      // 3) fetch image fields from DB (in case parent didn’t provide them)
       const bizId = business?.id ?? event.business_id
       if (!bizId) { setHeroUrl(null); return }
 
@@ -126,6 +145,7 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
     return () => { cancelled = true }
   }, [event.image_url, event.image_path, business?.image_url, business?.image_path, business?.id, event.business_id])
 
+  // Load interests & clicks
   useEffect(() => {
     let alive = true
     ;(async () => {
@@ -200,6 +220,13 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
   const price = event.is_free ? 'Free' : (event.price_text || '').trim()
 
+  const statusStyles = {
+    live: 'bg-green-100 text-green-800 border-green-200',
+    soon: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    upcoming: 'bg-blue-100 text-blue-800 border-blue-200',
+    ended: 'bg-gray-100 text-gray-800 border-gray-200'
+  }
+
   return (
     <>
       <article className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-[2px] hover:shadow-lg">
@@ -228,9 +255,14 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2 leading-snug">
               <h3 className="truncate text-base font-semibold text-gray-900">{event.title}</h3>
-              <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-pink-200 bg-pink-50 px-2 py-0.5 text-[11px] font-medium text-pink-700">
-                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-pink-600" />
-                happening
+              <span className={`ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusStyles[eventStatus.status]}`}>
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${
+                  eventStatus.status === 'live' ? 'animate-pulse bg-green-600' :
+                  eventStatus.status === 'soon' ? 'bg-yellow-600' :
+                  eventStatus.status === 'upcoming' ? 'bg-blue-600' :
+                  'bg-gray-600'
+                }`} />
+                {eventStatus.label}
               </span>
             </div>
 
@@ -256,9 +288,9 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
 
             <div className="mt-1 text-sm text-gray-800">
               🕒 {timeLabel}
-              {startsIn ? (
+              {startsIn && eventStatus.status !== 'ended' ? (
                 <span className="ml-2 rounded-full bg-yellow-100 px-2 py-[1px] text-[11px] text-yellow-800">
-                  starts in {startsIn}
+                  {eventStatus.status === 'live' ? 'happening now' : `starts in ${startsIn}`}
                 </span>
               ) : null}
               {price ? <span className="ml-2 text-gray-600">• {price}</span> : null}
@@ -281,9 +313,10 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
               <button
                 type="button"
                 onClick={toggleInterested}
-                disabled={working}
+                disabled={working || eventStatus.status === 'ended'}
                 className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold shadow border
-                  ${interested ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'}`}
+                  ${interested ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'}
+                  ${eventStatus.status === 'ended' ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {interested ? 'Interested ✓' : 'I’m interested'}
                 <span className={`rounded-full px-1.5 text-[11px] ${interested ? 'bg-white/20' : 'bg-indigo-100 text-indigo-700'}`}>
@@ -299,7 +332,7 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
                 Details
               </button>
 
-              {event.url ? (
+              {event.url && eventStatus.status !== 'ended' ? (
                 <button
                   type="button"
                   onClick={openTickets}
@@ -375,7 +408,7 @@ export default function EventCard({ event, business, userId, isAdmin }: Props) {
             {event.notes ? <div className="mt-3 text-sm text-gray-700 whitespace-pre-wrap break-words">{event.notes}</div> : null}
 
             <div className="mt-4 flex gap-2">
-              {event.url ? (
+              {event.url && eventStatus.status !== 'ended' ? (
                 <button onClick={openTickets} className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-indigo-600 to-sky-500 px-3 py-1.5 text-sm font-semibold text-white shadow hover:opacity-95">
                   Tickets
                 </button>
