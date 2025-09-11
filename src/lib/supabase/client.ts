@@ -1,4 +1,4 @@
-// src/lib/supabase/client.ts
+// // src/lib/supabase/client.ts
 'use client'
 import { createBrowserClient } from '@supabase/ssr'
 
@@ -8,3 +8,4 @@ const supabase = createBrowserClient(
 )
 
 export { supabase }
+

@@ -1,5 +1,5 @@
-// app/activity/[id]/edit/page.tsx
 'use client'
+
 import { supabase } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -10,13 +10,27 @@ type FormState = {
   description: string
   category: 'Outdoors' | 'Food & Drink' | 'Sports' | 'Other'
   neighborhood: 'RiNo' | 'LoHi' | 'Five Points'
-  location: string
-  start_at: string      // HTML datetime-local value
+  location_name: string
+  location_lat: number | null
+  location_lng: number | null
+  start_at: string   // HTML datetime-local value
+  end_at: string     // HTML datetime-local value
   max_spots: number
 }
 
 const CATEGORY_OPTIONS = ['Outdoors', 'Food & Drink', 'Sports', 'Other'] as const
 const NEIGHBORHOODS = ['RiNo', 'LoHi', 'Five Points'] as const
+
+// ✅ Helper to format JS Date into local datetime-local value
+function toLocalDatetimeValue(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const yyyy = date.getFullYear()
+  const mm = pad(date.getMonth() + 1)
+  const dd = pad(date.getDate())
+  const hh = pad(date.getHours())
+  const min = pad(date.getMinutes())
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`
+}
 
 export default function EditActivity() {
   const router = useRouter()
@@ -26,12 +40,13 @@ export default function EditActivity() {
   const [form, setForm] = useState<FormState>({
     title: '',
     description: '',
-    category: 'Other',        // <-- default so it's never null
+    category: 'Other',
     neighborhood: 'RiNo',
     location_name: '',
-  location_lat: null as number | null,
-  location_lng: null as number | null,
-    start_at: new Date().toISOString().slice(0, 16),
+    location_lat: null,
+    location_lng: null,
+    start_at: toLocalDatetimeValue(new Date()),
+    end_at: toLocalDatetimeValue(new Date(Date.now() + 60 * 60 * 1000)), // default +1h
     max_spots: 8,
   })
   const [loading, setLoading] = useState(true)
@@ -56,23 +71,39 @@ export default function EditActivity() {
         return
       }
 
-      // Normalize all fields so none are null/undefined
+      const startAt = data.start_at ? new Date(data.start_at) : new Date()
+      const endAt = data.end_at
+        ? new Date(data.end_at)
+        : new Date(startAt.getTime() + 60 * 60 * 1000)
+
       setForm({
         title: data.title ?? '',
         description: data.description ?? '',
         category: (data.category as FormState['category']) ?? 'Other',
         neighborhood: (data.neighborhood as FormState['neighborhood']) ?? 'RiNo',
-        location: data.location ?? '',
-        start_at: new Date(data.start_at ?? new Date()).toISOString().slice(0, 16),
+        location_name: data.location_name ?? '',
+        location_lat: data.location_lat ?? null,
+        location_lng: data.location_lng ?? null,
+        start_at: toLocalDatetimeValue(startAt), // 👈 exact local time
+        end_at: toLocalDatetimeValue(endAt),     // 👈 exact local time
         max_spots: data.max_spots ?? 8,
       })
       setLoading(false)
     })()
-  }, [id])
+  }, [id, router])
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
+
+    const startAt = new Date(form.start_at)
+    let endAt = form.end_at ? new Date(form.end_at) : null
+
+    // ✅ ensure end_at exists and is after start_at
+    if (!endAt || endAt <= startAt) {
+      endAt = new Date(startAt.getTime() + 60 * 60 * 1000)
+    }
+
     const { error } = await supabase
       .from('activities')
       .update({
@@ -81,12 +112,14 @@ export default function EditActivity() {
         category: form.category,
         neighborhood: form.neighborhood,
         location_name: form.location_name,
-  location_lat: form.location_lat,
-  location_lng: form.location_lng,
-        start_at: new Date(form.start_at),
+        location_lat: form.location_lat,
+        location_lng: form.location_lng,
+        start_at: startAt.toISOString(), // store UTC
+        end_at: endAt.toISOString(),     // store UTC
         max_spots: Number(form.max_spots),
       })
       .eq('id', id)
+
     setSaving(false)
     if (error) return alert(error.message)
     router.push('/discover')
@@ -116,7 +149,7 @@ export default function EditActivity() {
           <span className="text-sm text-gray-600">Category</span>
           <select
             className="w-full border rounded p-2"
-            value={form.category}  // never null now
+            value={form.category}
             onChange={e => setForm({ ...form, category: e.target.value as FormState['category'] })}
           >
             {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -127,7 +160,7 @@ export default function EditActivity() {
           <span className="text-sm text-gray-600">Neighborhood</span>
           <select
             className="w-full border rounded p-2"
-            value={form.neighborhood}  // never null now
+            value={form.neighborhood}
             onChange={e => setForm({ ...form, neighborhood: e.target.value as FormState['neighborhood'] })}
           >
             {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
@@ -136,11 +169,11 @@ export default function EditActivity() {
       </div>
 
       <LocationAutocomplete
-  value={form.location_name ?? form.location ?? ''} // fallback to old field
-  onSelect={({ name, lat, lng }) =>
-    setForm(f => ({ ...f, location_name: name, location_lat: lat, location_lng: lng, location: name }))
-  }
-/>
+        value={form.location_name}
+        onSelect={({ name, lat, lng }) =>
+          setForm(f => ({ ...f, location_name: name, location_lat: lat, location_lng: lng }))
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
@@ -153,16 +186,26 @@ export default function EditActivity() {
           />
         </label>
         <label className="block">
-          <span className="text-sm text-gray-600">Max spots</span>
+          <span className="text-sm text-gray-600">End time</span>
           <input
-            type="number"
-            min={1}
+            type="datetime-local"
             className="w-full border rounded p-2"
-            value={form.max_spots}
-            onChange={e => setForm({ ...form, max_spots: Number(e.target.value) })}
+            value={form.end_at}
+            onChange={e => setForm({ ...form, end_at: e.target.value })}
           />
         </label>
       </div>
+
+      <label className="block">
+        <span className="text-sm text-gray-600">Max spots</span>
+        <input
+          type="number"
+          min={1}
+          className="w-full border rounded p-2"
+          value={form.max_spots}
+          onChange={e => setForm({ ...form, max_spots: Number(e.target.value) })}
+        />
+      </label>
 
       <button disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl">
         {saving ? 'Saving…' : 'Save changes'}

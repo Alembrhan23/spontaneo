@@ -1,8 +1,7 @@
-// app/perks/page.tsx
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { createServerClient } from "@supabase/ssr"
-import PerksClient from "./PerksClient"
+import ClientPerksPage from "./PerksClient"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -19,15 +18,23 @@ export type PerkRow = {
   active: boolean
   claimed_count: number | null
   redeemed_count: number | null
+  business_id?: string
+  business_name?: string
+  business_description?: string
+  business_category?: string
+  business_vibe_tags?: string[]
+  business_amenities?: string[]
+  image_url?: string
+  perk_type?: string
+  is_active_now?: boolean
 }
 
 export default async function PerksPage({
   searchParams,
 }: {
-  // 👇 Next 15: searchParams is a Promise
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  // Auth gate (members only)
+  // Auth gate (members only) - SERVER SIDE
   const cookieStore = await cookies()
   const supa = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,7 +52,7 @@ export default async function PerksPage({
   if (!userRes?.user) redirect(`/login?next=/perks`)
 
   // Fetch once server-side
-  const { data, error } = await supa.from("perk_summaries").select("*").limit(300)
+  const { data, error } = await supa.from("business_perks_view").select("*").limit(300)
   if (error) throw new Error(error.message)
 
   // De-dupe by id in case the view returns multiples
@@ -58,7 +65,7 @@ export default async function PerksPage({
   const sort = (typeof sp.sort === "string" ? sp.sort : "timeleft") as "timeleft" | "start" | "title"
 
   return (
-    <PerksClient
+    <ClientPerksPage
       initialPerks={perks}
       initialQ={q}
       initialStatus={status}
