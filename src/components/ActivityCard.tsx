@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { MapPin, Clock, Users, ChevronDown } from 'lucide-react'
+import { MapPin, ChevronDown } from 'lucide-react'
 
 type Props = {
   a: any
@@ -13,64 +13,70 @@ type Props = {
   onJoined?: (id: string) => void
 }
 
-function VerifiedBadge({ small=false }:{ small?: boolean }) {
-  return (
-    <span
-      className={`ml-1 inline-flex items-center gap-1 rounded-full ${small?'px-1.5 py-0.5 text-[10px]':'px-2 py-0.5 text-xs'} bg-emerald-600/10 text-emerald-700`}
-      title="ID-verified host"
-    >
-      <svg width="12" height="12" viewBox="0 0 24 24" className="fill-current">
-        <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z"/>
-      </svg>
-      <span>Verified</span>
-    </span>
-  )
-}
-
-/** Bold, visible tick (blue circle + white check) with tooltip */
 function VerifiedTick() {
   return (
-    <span className="ml-1 inline-flex items-center align-middle" title="Verified" aria-label="Verified">
-      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-sky-500 text-white shadow-sm ring-1 ring-white/70">
-        <svg viewBox="0 0 24 24" className="w-[10px] h-[10px]" aria-hidden="true">
-          <path d="M9 16.2 4.8 12l1.4-1.4L9 13.4l8.8-8.8L19.2 6z" fill="currentColor" />
-        </svg>
+    <span className="ml-1 inline-flex items-center" title="Verified">
+      <span className="w-4 h-4 rounded-full bg-sky-500 text-white grid place-items-center text-[10px] shadow">
+        ✓
       </span>
     </span>
   )
 }
 
-function whenLabel(startISO: string) {
-  const d = new Date(startISO)
+/* ---------- Helpers ---------- */
+
+function formatDayAndTime(startISO: string, endISO?: string | null) {
+  const start = new Date(startISO)
+  const end = endISO ? new Date(endISO) : null
   const now = new Date()
-  const sameDay = d.toDateString() === now.toDateString()
-  const tomorrow = new Date(now); tomorrow.setDate(now.getDate()+1)
-  const isTomorrow = d.toDateString() === tomorrow.toDateString()
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  return `${sameDay ? 'Today' : isTomorrow ? 'Tomorrow' : d.toLocaleDateString(undefined,{ month:'short', day:'numeric' })} • ${time}`
+
+  const sameDay = start.toDateString() === now.toDateString()
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1)
+  const isTomorrow = start.toDateString() === tomorrow.toDateString()
+
+  const startTime = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const endTime = end ? end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null
+
+  const dayLabel = sameDay ? 'Today' : isTomorrow ? 'Tomorrow' :
+    start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+  return `${dayLabel} • ${startTime}${endTime ? ` – ${endTime}` : ''}`
 }
 
-function categoryGradient(cat?: string | null) {
-  switch ((cat || '').toLowerCase()) {
-    case 'food & drink': return 'from-rose-500 via-orange-500 to-amber-500'
-    case 'sports':
-    case 'active':       return 'from-sky-500 via-cyan-500 to-emerald-500'
-    case 'outdoors':     return 'from-emerald-500 via-lime-500 to-teal-500'
-    default:             return 'from-indigo-500 via-violet-500 to-fuchsia-500'
+function getStatus(startISO: string, endISO?: string | null, now: Date) {
+  const start = new Date(startISO)
+  const end = endISO ? new Date(endISO) : null
+
+  if (now < start) {
+    const diffMs = start.getTime() - now.getTime()
+    const mins = Math.floor(diffMs / 60000)
+    const hours = Math.floor(mins / 60)
+    const remaining = hours > 0 ? `${hours}h ${mins % 60}m` : `${mins}m`
+
+    if (diffMs <= 12 * 60 * 60 * 1000) {
+      return { label: `Soon • in ${remaining}`, color: 'bg-yellow-100 text-yellow-800' }
+    }
+    return { label: `Upcoming • in ${remaining}`, color: 'bg-gray-100 text-gray-600' }
   }
+
+  if (end && now >= start && now <= end) {
+    return { label: 'Live', color: 'bg-green-100 text-green-700 animate-pulse' }
+  }
+
+  if (end && now > end && now <= new Date(end.getTime() + 60 * 60 * 1000)) {
+    return { label: 'Ended', color: 'bg-red-100 text-red-700' }
+  }
+
+  return null
 }
 
-/** Autolink + wrapping for collapsed (1-line) and expanded text */
 function RichText({ text, expanded }: { text: string; expanded: boolean }) {
   const parts = useMemo(() => text.split(/(https?:\/\/[^\s]+)/g), [text])
   return (
-    <span
-      className={`${expanded ? 'whitespace-pre-wrap break-words' : 'block truncate'} text-inherit`}
-      style={expanded ? ({ overflowWrap: 'anywhere' } as React.CSSProperties) : undefined}
-    >
+    <span className={`${expanded ? 'whitespace-pre-wrap break-words' : 'block truncate'} text-inherit`}>
       {parts.map((p, i) =>
         /^https?:\/\//i.test(p) ? (
-          <a key={i} href={p} target="_blank" rel="noopener noreferrer" className={expanded ? 'underline break-all' : 'underline'}>
+          <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="underline">
             {p}
           </a>
         ) : (
@@ -81,17 +87,23 @@ function RichText({ text, expanded }: { text: string; expanded: boolean }) {
   )
 }
 
+/* ---------- Component ---------- */
+
 export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) {
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [now, setNow] = useState(new Date())
 
-  const count = typeof a.participants_count === 'number'
+  // ⏱ auto-update every minute for countdowns
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Always include the creator in the count
+  const count = (typeof a.participants_count === 'number'
     ? a.participants_count
-    : (a.participants?.length ?? 0)
-
-  const capacity = a.max_spots ?? 0
-  const spotsLeft = Math.max(0, capacity ? capacity - count : 0)
-  const pct = capacity ? Math.min(100, Math.round((count / capacity) * 100)) : 0
+    : (a.participants?.length ?? 0)) || 1
 
   const creatorName = a?.creator?.full_name || 'Someone'
   const creatorVerified = !!a?.creator?.is_verified
@@ -107,23 +119,20 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
     ? `https://www.google.com/maps/search/?api=1&query=${a.location_lat},${a.location_lng}`
     : (locationLabel ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationLabel)}` : '')
 
-  async function tryConfirmEndpoint(): Promise<boolean> {
-    try { const r = await fetch(`/api/plans/${a.id}/confirm`, { method: 'POST' }); return r.ok } catch { return false }
-  }
+  const status = getStatus(a.start_at, a.end_at, now)
 
+  /* ----- Join & Leave ----- */
   async function join() {
     setLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { alert('Please log in.'); return }
 
-      const ok = await tryConfirmEndpoint()
-      if (!ok) {
-        const { error } = await supabase
-          .from('activity_participants')
-          .insert({ activity_id: a.id, user_id: user.id })
-        if (error) throw error
-      }
+      const { error } = await supabase
+        .from('activity_participants')
+        .insert({ activity_id: a.id, user_id: user.id })
+      if (error) throw error
+
       onJoined?.(a.id)
     } catch (e: any) {
       alert(e?.message ?? 'Failed to join')
@@ -136,22 +145,15 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
     if (!confirm('Leave this plan?')) return
     setLoading(true)
     try {
-      let ok = false
-      try {
-        const r = await fetch(`/api/plans/${a.id}/leave`, { method: 'POST' })
-        ok = r.ok
-      } catch { ok = false }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not signed in')
 
-      if (!ok) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error('Not signed in')
-        const { error } = await supabase
-          .from('activity_participants')
-          .delete()
-          .eq('activity_id', a.id)
-          .eq('user_id', user.id)
-        if (error) throw error
-      }
+      const { error } = await supabase
+        .from('activity_participants')
+        .delete()
+        .eq('activity_id', a.id)
+        .eq('user_id', user.id)
+      if (error) throw error
 
       onJoined?.(a.id)
     } catch (e: any) {
@@ -161,39 +163,33 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
     }
   }
 
+  /* ----- UI ----- */
   return (
-    <div className="group bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition">
-      {/* Gradient ribbon */}
-      <div className={`h-1 bg-gradient-to-r ${categoryGradient(a.category)}`} />
-
-      {/* Top row: host + chips */}
-      <div className="px-4 pt-4 flex items-center gap-3">
-        <img src={avatarSrc} className="w-9 h-9 rounded-full object-cover" alt="" />
-        <div className="min-w-0">
-          <div className="font-semibold truncate">
+    <div className={`group bg-white rounded-2xl border overflow-hidden shadow-sm hover:shadow-xl transition transform hover:-translate-y-1 ${status?.label === 'Live' ? 'border-green-400' : 'border-zinc-200'}`}>
+      {/* Header */}
+      <div className="px-4 py-3 flex items-center gap-3 border-b bg-gray-50">
+        <img src={avatarSrc} className="w-10 h-10 rounded-full object-cover" alt="" />
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold truncate flex items-center gap-1">
             {displayName}
             {creatorVerified && <VerifiedTick />}
           </div>
-          <div className="text-[11px] text-gray-400">{a.created_at ? new Date(a.created_at).toLocaleString() : ''}</div>
+          <div className="text-xs text-gray-500">{formatDayAndTime(a.start_at, a.end_at)}</div>
         </div>
-        <div className="ml-auto flex flex-wrap gap-2">
-          <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 text-xs">
-            {whenLabel(a.start_at)}
+        {status && (
+          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
+            {status.label}
           </span>
-          {a.neighborhood && (
-            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs">
-              {a.neighborhood}
-            </span>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Title + one-line description (expand to full) */}
-      <div className="px-4 mt-3">
+      {/* Body */}
+      <div className="p-4 space-y-3">
         <div className="text-lg font-bold leading-snug">{a.title}</div>
+
         {a.description && (
           <>
-            <div className="text-sm text-gray-700 mt-1">
+            <div className="text-sm text-gray-700">
               <RichText text={a.description} expanded={expanded} />
             </div>
             <button
@@ -204,62 +200,74 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
               {expanded ? 'Hide details' : 'Show details'}
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
             </button>
+
+            {expanded && (
+  <div className="mt-3 space-y-3 text-sm">
+    {/* Location */}
+    {locationLabel && (
+      <div className="flex items-center gap-2 text-gray-700">
+        <MapPin className="w-4 h-4 shrink-0 text-indigo-600" />
+        {mapsHref ? (
+          <a
+            href={mapsHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline"
+          >
+            {locationLabel}
+          </a>
+        ) : (
+          <span>{locationLabel}</span>
+        )}
+      </div>
+    )}
+
+    {/* Chips */}
+    <div className="flex flex-wrap gap-2">
+      {a.neighborhood && (
+        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">
+          {a.neighborhood}
+        </span>
+      )}
+      {a.category && (
+        <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs">
+          {a.category}
+        </span>
+      )}
+    </div>
+  </div>
+)}
           </>
         )}
-      </div>
 
-      {/* Time + Place row */}
-      <div className="px-4 mt-3 flex items-center gap-4 text-sm text-gray-600">
-        <div className="flex items-center gap-1">
-          <Clock className="w-4 h-4" />
-          {new Date(a.start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-        </div>
-        {locationLabel && (
-          <div className="flex items-center gap-1 min-w-0">
-            <MapPin className="w-4 h-4 shrink-0" />
-            {mapsHref ? (
-              <a
-                href={mapsHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="truncate max-w-[14rem] hover:underline"
-                title={locationLabel}
+        {/* Participants row */}
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex -space-x-2">
+            {Array.from({ length: Math.min(3, count) }).map((_, i) => (
+              <div
+                key={i}
+                className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white relative overflow-hidden"
               >
-                {locationLabel}
-              </a>
-            ) : (
-              <span className="truncate max-w-[14rem]" title={locationLabel}>{locationLabel}</span>
+                {/* shimmer effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 animate-shimmer" />
+              </div>
+            ))}
+            {count > 3 && (
+              <div className="w-6 h-6 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-[10px] text-gray-600">
+                +{count - 3}
+              </div>
             )}
           </div>
-        )}
-      </div>
-
-      {/* Capacity bar */}
-      <div className="px-4 mt-3 flex items-center gap-2 text-xs text-zinc-700">
-        <Users className="w-4 h-4" />
-        {capacity
-          ? <span>{count}/{capacity} going • {spotsLeft} left</span>
-          : <span>{count} going</span>
-        }
-      </div>
-
-      {capacity ? (
-        <div className="px-4 mt-2">
-          <div className="h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
-            <div
-              className="h-1.5 bg-gradient-to-r from-indigo-500 to-violet-500"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+          <span>{count} going</span>
         </div>
-      ) : null}
+      </div>
 
-      {/* Primary action */}
-      <div className="px-4 pb-4 pt-3">
+      {/* Actions */}
+      <div className="px-4 pb-4">
         {isOwner ? (
           <Link
             href={`/activity/${a.id}/edit`}
-            className="block text-center w-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100 py-3 rounded-xl font-medium"
+            className="block text-center w-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100 py-2.5 rounded-xl font-medium"
           >
             Edit Activity
           </Link>
@@ -267,31 +275,18 @@ export default function ActivityCard({ a, isOwner, isJoined, onJoined }: Props) 
           <button
             onClick={leave}
             disabled={loading}
-            className="w-full bg-white border border-zinc-300 text-zinc-800 hover:bg-zinc-50 py-3 rounded-xl font-medium disabled:opacity-50"
-            title="Leave this plan"
+            className="w-full bg-white border border-zinc-300 text-zinc-800 hover:bg-zinc-50 py-2.5 rounded-xl font-medium disabled:opacity-50"
           >
             {loading ? 'Leaving…' : 'Leave'}
           </button>
-        ) : (capacity && spotsLeft === 0) ? (
-          <button
-            disabled
-            className="w-full bg-gray-200 text-gray-500 py-3 rounded-xl font-medium cursor-not-allowed"
-          >
-            Full
-          </button>
         ) : (
-          <>
-            <button
-              onClick={join}
-              disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-3 rounded-xl font-medium"
-            >
-              {loading ? 'Joining…' : "I’m In!"}
-            </button>
-            <div className="mt-1 text-[11px] text-gray-500 text-center">
-              +5 VP now • +20 VP at check-in.
-            </div>
-          </>
+          <button
+            onClick={join}
+            disabled={loading}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-2.5 rounded-xl font-medium"
+          >
+            {loading ? 'Joining…' : "I’m In!"}
+          </button>
         )}
       </div>
     </div>

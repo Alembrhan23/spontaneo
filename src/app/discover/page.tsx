@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabase/client'
 import ActivityCard from '@/components/ActivityCard'
 import { PlusCircle, Shuffle, Utensils, Dumbbell, Music2, Coffee } from 'lucide-react'
 
-/* -------------------- types -------------------- */
 type ActivityRow = {
   id: string
   title: string
@@ -18,6 +17,7 @@ type ActivityRow = {
   location_lat?: number | null
   location_lng?: number | null
   start_at: string
+  end_at: string | null
   max_spots: number | null
   created_at: string | null
   creator_id: string
@@ -30,7 +30,6 @@ type ProfileRow = {
 }
 type ParticipantRow = { activity_id: string; user_id: string }
 
-/* -------------------- constants -------------------- */
 const quickActions = [
   { icon: PlusCircle, label: 'Create Plan',  desc: 'Start something new',   action: 'create' },
   { icon: Shuffle,   label: 'Surprise Me',  desc: 'Find something random', action: 'surprise' },
@@ -41,7 +40,6 @@ const quickActions = [
 ] as const
 
 const neighborhoods = ['All Neighborhoods', 'RiNo', 'LoHi', 'Five Points'] as const
-
 const filters = [
   'All Activities',
   'Outdoors',
@@ -54,10 +52,8 @@ const filters = [
   'Coffee & Co-work',
 ] as const
 
-/* -------------------- component -------------------- */
 export default function DiscoverPage() {
   const router = useRouter()
-
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [rows, setRows] = useState<(ActivityRow & {
@@ -67,11 +63,9 @@ export default function DiscoverPage() {
     _isJoined: boolean
   })[]>([])
   const [me, setMe] = useState<string | null>(null)
-
   const [n, setN] = useState<(typeof neighborhoods)[number]>('All Neighborhoods')
   const [f, setF] = useState<(typeof filters)[number]>('All Activities')
 
-  // guard to ignore state updates after unmount or stale loads
   const aliveRef = useRef(true)
   useEffect(() => {
     aliveRef.current = true
@@ -82,13 +76,13 @@ export default function DiscoverPage() {
     setLoading(true)
     setError(null)
     try {
-      // 1) current user
+      const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString()
       const [{ data: uData }, { data: acts, error: eActs }] = await Promise.all([
         supabase.auth.getUser(),
         supabase
           .from('activities')
-          .select('id, title, description, category, neighborhood, location, start_at, max_spots, created_at, creator_id, location_name, location_lat, location_lng')
-          .gte('start_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+          .select('id, title, description, category, neighborhood, location, start_at, end_at, max_spots, created_at, creator_id, location_name, location_lat, location_lng')
+          .gte('end_at', cutoff)
           .order('start_at', { ascending: true })
       ])
 
@@ -105,7 +99,6 @@ export default function DiscoverPage() {
       const activityIds = activities.map(a => a.id)
       const creatorIds = Array.from(new Set(activities.map(a => a.creator_id)))
 
-      // 2) parallel fetch participants + my joined + creator profiles
       const [partsRes, mineRes, profRes] = await Promise.all([
         activityIds.length
           ? supabase.from('activity_participants').select('activity_id, user_id').in('activity_id', activityIds)
@@ -150,16 +143,37 @@ export default function DiscoverPage() {
     }
   }, [])
 
-  // initial load + allow manual refresh via child callback
   useEffect(() => { load() }, [load])
 
-  // computed, hide joined if logged in, apply filters
   const items = useMemo(() => {
-    return rows.filter(a =>
-      (n === 'All Neighborhoods' || a.neighborhood === n) &&
-      (f === 'All Activities' || a.category === f) &&
-      (!(!!me) || !a._isJoined)
-    )
+    const now = new Date()
+    return rows
+      .filter(a =>
+        (n === 'All Neighborhoods' || a.neighborhood === n) &&
+        (f === 'All Activities' || a.category === f) &&
+        (!(!!me) || !a._isJoined)
+      )
+      .sort((a, b) => {
+        const now = new Date()
+        const aStart = new Date(a.start_at)
+        const bStart = new Date(b.start_at)
+        const aEnd = a.end_at ? new Date(a.end_at) : null
+        const bEnd = b.end_at ? new Date(b.end_at) : null
+
+        const isALive = aStart <= now && aEnd && now <= aEnd
+        const isBLive = bStart <= now && bEnd && now <= bEnd
+        if (isALive && !isBLive) return -1
+        if (!isALive && isBLive) return 1
+
+        const isASoon = aStart > now
+        const isBSoon = bStart > now
+        if (isASoon && !isBSoon) return -1
+        if (!isASoon && isBSoon) return 1
+
+        // ended last
+        if (aEnd && bEnd) return aEnd.getTime() - bEnd.getTime()
+        return aStart.getTime() - bStart.getTime()
+      })
   }, [rows, n, f, me])
 
   function onQuick(action: string) {
@@ -200,7 +214,7 @@ export default function DiscoverPage() {
         ))}
       </div>
 
-      {/* Activity category chips */}
+      {/* Category chips */}
       <div className="flex flex-wrap gap-2">
         {filters.map((x) => (
           <button
@@ -226,7 +240,7 @@ export default function DiscoverPage() {
               a={a}
               isOwner={a._isOwner}
               isJoined={a._isJoined}
-              onJoined={load}   // refresh after join/leave
+              onJoined={load}
             />
           ))}
           {items.length === 0 && (
