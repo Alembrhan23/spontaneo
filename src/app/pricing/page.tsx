@@ -36,8 +36,8 @@ export default function PricingPage() {
   }, [])
 
   const pricePlus = annual
-    ? { label: '$39.90/yr', sub: '≈ $3.33/mo billed annually' }
-    : { label: '$3.99/mo', sub: 'billed monthly' }
+    ? { label: '$36.90/yr', sub: '≈ $2.33/mo billed annually' }
+    : { label: '$2.99/mo', sub: 'billed monthly' }
 
   const hasBilling = !!(sub?.stripe_customer_id || sub?.stripe_subscription_id)
   const isPlus = sub?.plan === 'plus'
