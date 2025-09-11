@@ -17,6 +17,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.541.0",
     "next": "15.5.0",
     "node-fetch": "^3.3.2",
@@ -25,6 +26,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.62.0",
+    "react-leaflet": "^5.0.0",
     "sharp": "^0.34.3",
     "stripe": "^18.5.0",
     "zod": "^3.25.76"
@@ -32,6 +34,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.20",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
