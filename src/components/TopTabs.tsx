@@ -14,7 +14,7 @@ const TABS: Tab[] = [
   { href: '/happening',     label: 'Happening' },
   { href: '/plans',         label: 'My Plans' },
   { href: '/perks',         label: 'Perks' },
-  { href: '/first-friday',  label: 'First Friday' },
+  // { href: '/first-friday',  label: 'First Friday' },
 ]
 
 export default function TopTabs() {
