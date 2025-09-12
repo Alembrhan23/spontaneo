@@ -366,29 +366,33 @@ function TrustSafetySection() {
 }
 
 /* ---------- Business Partnerships Section ---------- */
-function BusinessPartnershipsSection() {
+/* ---------- Birthday Perks Section ---------- */
+function BirthdayPerksSection() {
   return (
-    <section id="partners" className="py-12 sm:py-16 md:py-20 bg-white">
+    <section id="birthday-perks" className="py-12 sm:py-16 md:py-20 bg-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-5">
         <div className="text-center mb-8 sm:mb-12 md:mb-16">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
-            Exclusive Perks & Partnerships
+            Celebrate Your Birthday Week on Us
           </h2>
           <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
-            Enjoy special benefits at local businesses when you join activities through Nowio
+            Unlock exclusive birthday perks at amazing local spots. It's the perfect reason to try something new and meet your crew.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          {/* For Participants */}
           <div>
-            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-6 rounded-2xl border border-purple-100">
-              <h3 className="font-semibold text-lg text-gray-900 mb-4">For Participants</h3>
+            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-6 rounded-2xl border border-purple-100 shadow-sm">
+              <h3 className="font-semibold text-lg text-gray-900 mb-4">Your Birthday Rewards</h3>
               <ul className="space-y-3">
                 {[
-                  "10% off at partner coffee shops",
-                  "Free appetizer with purchase at local restaurants",
-                  "Discounted entry to fitness classes",
-                  "Special tasting flights at breweries"
+                  "Free specialty coffee or pastry",
+                  "Complimentary appetizer to share",
+                  "No cover charge for your group",
+                  "Exclusive birthday tasting flight",
+                  "Discount on group activities",
+                  "And more surprises!"
                 ].map((perk, index) => (
                   <li key={index} className="flex items-start">
                     <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mt-0.5 mr-3 flex-shrink-0">
@@ -403,44 +407,42 @@ function BusinessPartnershipsSection() {
             </div>
           </div>
           
+          {/* How it Works */}
           <div>
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-2xl border border-amber-100">
-              <h3 className="font-semibold text-lg text-gray-900 mb-4">For Business Owners</h3>
-              <p className="text-gray-700 mb-4">
-                Partner with us to attract new customers and fill your venue during off-peak hours.
-              </p>
-              <ul className="space-y-2">
-                <li className="flex items-center">
-                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mr-2 flex-shrink-0">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-2xl border border-amber-100 shadow-sm">
+              <h3 className="font-semibold text-lg text-gray-900 mb-4">How To Claim Your Perks</h3>
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-medium text-sm mr-3">1</div>
                   </div>
-                  <span className="text-gray-700">Drive foot traffic during slow periods</span>
-                </li>
-                <li className="flex items-center">
-                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mr-2 flex-shrink-0">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Sign Up & Add Your Birthday</h4>
+                    <p className="text-sm text-gray-600 mt-1">Tell us when you were born. We'll keep it safe and use it for one thing: celebrating you.</p>
                   </div>
-                  <span className="text-gray-700">Reach highly-engaged local customers</span>
-                </li>
-                <li className="flex items-center">
-                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mr-2 flex-shrink-0">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
+                </div>
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-medium text-sm mr-3">2</div>
                   </div>
-                  <span className="text-gray-700">Simple analytics to track campaign success</span>
-                </li>
-              </ul>
-              <div className="mt-6">
-                <Link href="/business" className="inline-flex items-center text-amber-700 hover:text-amber-800 font-medium text-sm">
-                  Learn about business partnerships
-                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                  </svg>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Unlock Your Offers</h4>
+                    <p className="text-sm text-gray-600 mt-1">A week before your birthday, your personal map of birthday perks will go live.</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-medium text-sm mr-3">3</div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Gather Your Friends & Celebrate</h4>
+                    <p className="text-sm text-gray-600 mt-1">Pick a perk, start an activity, and invite others to join your celebration. The first one's on us.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 text-center">
+                <Link href="/signup" className="inline-flex items-center justify-center px-4 py-2 bg-amber-600 text-white font-medium rounded-lg hover:bg-amber-700 text-sm">
+                  Sign Up & Claim Your Birthday
                 </Link>
               </div>
             </div>
@@ -727,7 +729,7 @@ export default function Home() {
       <TrustSafetySection />
 
       {/* ===================== Business Partnerships (NEW) ===================== */}
-      <BusinessPartnershipsSection />
+      <BirthdayPerksSection />
 
       {/* ===================== Popular Categories ===================== */}
       <section id="niches" className="py-12 sm:py-16 md:py-20 bg-white">
